@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ECM_QSIM_NOISE_HPP_
+#define ECM_QSIM_NOISE_HPP_
 
 // Gate, idle and readout noise: trajectory sampling and readout flips.
 
@@ -11,3 +12,5 @@ struct NoiseModel {
 };
 
 }  // namespace ecm_qsim
+
+#endif  // ECM_QSIM_NOISE_HPP_

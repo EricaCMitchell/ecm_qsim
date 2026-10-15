@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ECM_QSIM_CIRCUIT_HPP_
+#define ECM_QSIM_CIRCUIT_HPP_
 
 // Intermediate representation of a parsed circuit.
 // Time steps are explicit because idle noise depends on which qubits are idle
@@ -28,3 +29,5 @@ struct Circuit {
 };
 
 }  // namespace ecm_qsim
+
+#endif  // ECM_QSIM_CIRCUIT_HPP_
