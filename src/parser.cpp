@@ -1,8 +1,12 @@
 #include "ecm_qsim/parser.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <limits>
 #include <optional>
 #include <string>
@@ -67,6 +71,100 @@ std::optional<long long> parse_integer(std::string_view token) {
   return value;
 }
 
+// Decimal syntax accepted by the circuit format. Hexadecimal floats and
+// spellings such as nan and inf are not part of the format.
+bool has_decimal_syntax(std::string_view token) {
+  std::size_t i = 0;
+  if (i < token.size() && (token[i] == '+' || token[i] == '-')) {
+    ++i;
+  }
+
+  bool has_digits = false;
+  while (i < token.size() && token[i] >= '0' && token[i] <= '9') {
+    has_digits = true;
+    ++i;
+  }
+  if (i < token.size() && token[i] == '.') {
+    ++i;
+    while (i < token.size() && token[i] >= '0' && token[i] <= '9') {
+      has_digits = true;
+      ++i;
+    }
+  }
+  if (!has_digits) {
+    return false;
+  }
+
+  if (i < token.size() && (token[i] == 'e' || token[i] == 'E')) {
+    ++i;
+    if (i < token.size() && (token[i] == '+' || token[i] == '-')) {
+      ++i;
+    }
+    const std::size_t exponent_start = i;
+    while (i < token.size() && token[i] >= '0' && token[i] <= '9') {
+      ++i;
+    }
+    if (i == exponent_start) {
+      return false;
+    }
+  }
+  return i == token.size();
+}
+
+// Converts a validated decimal token and rejects overflow to infinity.
+// strtod is used because libc++ floating-point from_chars is recent.
+std::optional<double> parse_angle(std::string_view token) {
+  if (!has_decimal_syntax(token)) {
+    return std::nullopt;
+  }
+  const std::string text(token);
+  char* end = nullptr;
+  const double value = std::strtod(text.c_str(), &end);
+  if (end != text.c_str() + text.size() || !std::isfinite(value)) {
+    return std::nullopt;
+  }
+  return value;
+}
+
+struct GateSpec {
+  std::string_view name;
+  GateType type;
+  bool has_angle;
+  int n_qubits;
+};
+
+constexpr std::array<GateSpec, 12> kGates{{{"X", GateType::X, false, 1},
+                                           {"Y", GateType::Y, false, 1},
+                                           {"Z", GateType::Z, false, 1},
+                                           {"H", GateType::H, false, 1},
+                                           {"S", GateType::S, false, 1},
+                                           {"T", GateType::T, false, 1},
+                                           {"RX", GateType::RX, true, 1},
+                                           {"RY", GateType::RY, true, 1},
+                                           {"RZ", GateType::RZ, true, 1},
+                                           {"CNOT", GateType::CNOT, false, 2},
+                                           {"CZ", GateType::CZ, false, 2},
+                                           {"CY", GateType::CY, false, 2}}};
+
+const GateSpec* find_gate(std::string_view name) {
+  for (const GateSpec& spec : kGates) {
+    if (spec.name == name) {
+      return &spec;
+    }
+  }
+  return nullptr;
+}
+
+// Usage shown in arity errors, e.g. "RX theta q" or "CNOT control target".
+std::string usage(const GateSpec& spec) {
+  std::string text(spec.name);
+  if (spec.has_angle) {
+    text += " theta";
+  }
+  text += spec.n_qubits == 1 ? " q" : " control target";
+  return text;
+}
+
 class Parser {
 public:
   explicit Parser(std::istream& in) : in_(in) {}
@@ -129,6 +227,7 @@ private:
            std::to_string(kMaxQubits));
     }
     circuit_.n_qubits = static_cast<int>(*n);
+    used_on_line_.assign(circuit_.n_qubits, 0);
     header_line_ = line_;
   }
 
@@ -140,9 +239,68 @@ private:
       expect_arguments(tokens, 0, "TICK");
       circuit_.timesteps.push_back(std::move(current_));
       current_ = TimeStep{};
+      std::fill(used_on_line_.begin(), used_on_line_.end(), 0);
       return;
     }
-    fail("unknown gate " + quoted(tokens[0]));
+    parse_gate(tokens);
+  }
+
+  void parse_gate(const Tokens& tokens) {
+    const GateSpec* spec = find_gate(tokens[0]);
+    if (spec == nullptr) {
+      fail("unknown gate " + quoted(tokens[0]));
+    }
+    const std::size_t n_args = (spec->has_angle ? 1 : 0) + spec->n_qubits;
+    expect_arguments(tokens, n_args, usage(*spec));
+
+    Op op{spec->type, {0, 0}, 0.0};
+    std::size_t next = 1;
+    if (spec->has_angle) {
+      op.theta = parse_theta(tokens[next++]);
+    }
+    for (int i = 0; i < spec->n_qubits; ++i) {
+      op.qubits[i] = parse_qubit(tokens[next++]);
+    }
+    if (spec->n_qubits == 2 && op.qubits[0] == op.qubits[1]) {
+      fail(std::string(spec->name) + " control and target must differ, got " +
+           std::to_string(op.qubits[0]) + " and " +
+           std::to_string(op.qubits[1]));
+    }
+    for (int i = 0; i < spec->n_qubits; ++i) {
+      claim(op.qubits[i]);
+    }
+    current_.ops.push_back(op);
+  }
+
+  double parse_theta(std::string_view token) const {
+    const auto theta = parse_angle(token);
+    if (!theta) {
+      fail("angle must be a finite decimal number, got " + quoted(token));
+    }
+    return *theta;
+  }
+
+  int parse_qubit(std::string_view token) const {
+    const auto q = parse_integer(token);
+    if (!q || *q < 0) {
+      fail("qubit index must be a non-negative integer, got " + quoted(token));
+    }
+    if (*q >= circuit_.n_qubits) {
+      fail("qubit index " + quoted(token) + " out of range for " +
+           std::to_string(circuit_.n_qubits) + " qubits");
+    }
+    return static_cast<int>(*q);
+  }
+
+  // Marks qubit as acted on in the current time step.
+  void claim(int qubit) {
+    int& used = used_on_line_[qubit];
+    if (used != 0) {
+      fail("qubit " + std::to_string(qubit) +
+           " already used in this time step (line " + std::to_string(used) +
+           ")");
+    }
+    used = line_;
   }
 
   std::istream& in_;
@@ -150,6 +308,7 @@ private:
   int header_line_ = 0;  // 0 until QUBITS is seen
   Circuit circuit_{};
   TimeStep current_;
+  std::vector<int> used_on_line_;  // per qubit: line of its gate this step
 };
 
 }  // namespace

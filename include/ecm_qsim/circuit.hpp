@@ -14,9 +14,12 @@ enum class GateType { X, Y, Z, H, S, T, RX, RY, RZ, CNOT, CZ, CY };
 
 struct Op {
   GateType gate;
-  // Control first for two-qubit gates; [1] unused for one-qubit gates.
+  // Control first for two-qubit gates; [1] is 0 and unused for one-qubit
+  // gates.
   std::array<int, 2> qubits;
-  double theta;  // rotation angle in radians; unused for fixed gates
+  double theta;  // rotation angle in radians; 0 and unused for fixed gates
+
+  bool operator==(const Op&) const = default;
 };
 
 struct TimeStep {
