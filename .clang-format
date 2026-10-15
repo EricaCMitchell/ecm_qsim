@@ -1,0 +1,21 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+Standard: c++20
+
+IndentWidth: 2
+ColumnLimit: 80
+AccessModifierOffset: -2
+
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+InsertBraces: true
+InsertNewlineAtEOF: true
+
+TabWidth:        8
+UseTab:          Never
