@@ -8,6 +8,7 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(unit_tests
   test_circuit.cpp
+  test_gates.cpp
   test_parser.cpp
 )
 target_link_libraries(unit_tests PRIVATE ecm_qsim_core Catch2::Catch2WithMain)
