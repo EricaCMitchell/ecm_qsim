@@ -23,8 +23,13 @@ struct TimeStep {
   std::vector<Op> ops;  // one TICK; may be empty
 };
 
+// Largest qubit count the IR represents: the amplitude count 2^n fits in
+// uint64_t. Whether the state vector fits in memory is checked where it is
+// allocated, not here.
+inline constexpr int kMaxQubits = 63;
+
 struct Circuit {
-  int n_qubits;
+  int n_qubits;  // 1..kMaxQubits
   std::vector<TimeStep> timesteps;
 };
 

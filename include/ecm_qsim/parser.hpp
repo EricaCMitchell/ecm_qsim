@@ -3,6 +3,29 @@
 
 // Reads the circuit text format into a Circuit.
 
-namespace ecm_qsim {}  // namespace ecm_qsim
+#include <istream>
+#include <stdexcept>
+#include <string>
+
+#include "ecm_qsim/circuit.hpp"
+
+namespace ecm_qsim {
+
+// Malformed circuit text. what() is "line N: message"; line() is 1-based and
+// counts every physical line, including comments and blank lines.
+class ParseError : public std::runtime_error {
+public:
+  ParseError(int line, const std::string& message);
+  int line() const noexcept { return line_; }
+
+private:
+  int line_;
+};
+
+// Parses a whole circuit. Throws ParseError on malformed input and
+// std::runtime_error if the input stream fails before normal EOF.
+Circuit parse_circuit(std::istream& in);
+
+}  // namespace ecm_qsim
 
 #endif  // ECM_QSIM_PARSER_HPP_
