@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
+#include <fstream>
 #include <limits>
 #include <optional>
 #include <string>
@@ -315,6 +316,15 @@ private:
 
 Circuit parse_circuit(std::istream& in) {
   return Parser(in).parse();
+}
+
+Circuit parse_circuit_file(const std::filesystem::path& path) {
+  std::ifstream in(path);
+  if (!in) {
+    throw std::runtime_error("cannot open circuit file '" + path.string() +
+                             "'");
+  }
+  return parse_circuit(in);
 }
 
 }  // namespace ecm_qsim

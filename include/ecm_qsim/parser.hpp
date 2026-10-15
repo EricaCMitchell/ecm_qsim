@@ -3,6 +3,7 @@
 
 // Reads the circuit text format into a Circuit.
 
+#include <filesystem>
 #include <istream>
 #include <stdexcept>
 #include <string>
@@ -25,6 +26,10 @@ private:
 // Parses a whole circuit. Throws ParseError on malformed input and
 // std::runtime_error if the input stream fails before normal EOF.
 Circuit parse_circuit(std::istream& in);
+
+// Opens and parses a circuit file. Throws std::runtime_error if the file
+// cannot be opened or read, ParseError if it is malformed.
+Circuit parse_circuit_file(const std::filesystem::path& path);
 
 }  // namespace ecm_qsim
 

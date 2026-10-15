@@ -11,6 +11,9 @@ add_executable(unit_tests
   test_parser.cpp
 )
 target_link_libraries(unit_tests PRIVATE ecm_qsim_core Catch2::Catch2WithMain)
+target_compile_definitions(unit_tests PRIVATE
+  ECM_QSIM_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples"
+)
 target_compile_options(unit_tests PRIVATE -Wall -Wextra -Wpedantic)
 
 include(Catch)

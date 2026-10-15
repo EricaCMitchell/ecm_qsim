@@ -286,3 +286,19 @@ TEST_CASE("Two gates on one qubit in a time step are rejected") {
   require_error("QUBITS 1\nTICK\nX 0\nX 0\n", 4,
                 "qubit 0 already used in this time step (line 3)");
 }
+
+TEST_CASE("The GHZ example file parses") {
+  const Circuit c = parse_circuit_file(ECM_QSIM_EXAMPLES_DIR "/ghz3.txt");
+  CHECK(c.n_qubits == 3);
+  REQUIRE(c.timesteps.size() == 4);
+  CHECK(c.timesteps[0].ops == std::vector<Op>{{GateType::H, {0, 0}, 0.0}});
+  CHECK(c.timesteps[1].ops == std::vector<Op>{{GateType::CNOT, {0, 1}, 0.0}});
+  CHECK(c.timesteps[2].ops == std::vector<Op>{{GateType::CNOT, {1, 2}, 0.0}});
+  CHECK(c.timesteps[3].ops == std::vector<Op>{{GateType::RZ, {0, 0}, 0.785}});
+}
+
+TEST_CASE("A missing circuit file is reported with its path") {
+  const std::string path = ECM_QSIM_EXAMPLES_DIR "/does_not_exist.txt";
+  CHECK_THROWS_WITH(parse_circuit_file(path),
+                    "cannot open circuit file '" + path + "'");
+}
