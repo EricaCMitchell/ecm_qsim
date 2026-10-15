@@ -1,0 +1,9 @@
+QUBITS 3
+# prepare a 3-qubit GHZ state
+H 0
+TICK
+CNOT 0 1
+TICK
+CNOT 1 2
+TICK
+RZ 0.785 0
