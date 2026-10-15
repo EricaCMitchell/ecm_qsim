@@ -17,6 +17,12 @@ namespace ecm_qsim {
 // Throws std::invalid_argument if gate is not a one-qubit gate.
 Eigen::Matrix2cd matrix_1q(GateType gate, double theta = 0.0);
 
+// Matrix of a two-qubit gate. Rows and columns are ordered
+// (q_first, q_second) = 00, 01, 10, 11: the first-listed qubit (the control)
+// is the high bit. So CNOT = diag(I, X), CY = diag(I, Y), CZ = diag(I, Z).
+// Throws std::invalid_argument if gate is not a two-qubit gate.
+Eigen::Matrix4cd matrix_2q(GateType gate);
+
 }  // namespace ecm_qsim
 
 #endif  // ECM_QSIM_GATES_HPP_

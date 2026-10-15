@@ -18,6 +18,13 @@ Eigen::Matrix2cd make_2x2(cd a, cd b, cd c, cd d) {
   return m;
 }
 
+// diag(I, u): applies u to the second-listed qubit when the first is 1.
+Eigen::Matrix4cd controlled(const Eigen::Matrix2cd& u) {
+  Eigen::Matrix4cd m = Eigen::Matrix4cd::Identity();
+  m.bottomRightCorner<2, 2>() = u;
+  return m;
+}
+
 }  // namespace
 
 Eigen::Matrix2cd matrix_1q(GateType gate, double theta) {
@@ -49,6 +56,28 @@ Eigen::Matrix2cd matrix_1q(GateType gate, double theta) {
       break;
   }
   throw std::invalid_argument("matrix_1q: not a one-qubit gate");
+}
+
+Eigen::Matrix4cd matrix_2q(GateType gate) {
+  switch (gate) {
+    case GateType::CNOT:
+      return controlled(matrix_1q(GateType::X));
+    case GateType::CZ:
+      return controlled(matrix_1q(GateType::Z));
+    case GateType::CY:
+      return controlled(matrix_1q(GateType::Y));
+    case GateType::X:
+    case GateType::Y:
+    case GateType::Z:
+    case GateType::H:
+    case GateType::S:
+    case GateType::T:
+    case GateType::RX:
+    case GateType::RY:
+    case GateType::RZ:
+      break;
+  }
+  throw std::invalid_argument("matrix_2q: not a two-qubit gate");
 }
 
 }  // namespace ecm_qsim
