@@ -1,5 +1,4 @@
 #include <Eigen/Core>
-#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -13,9 +12,9 @@
 
 #include "ecm_qsim/circuit.hpp"
 #include "ecm_qsim/gates.hpp"
+#include "eigen_helpers.hpp"
 
 using namespace ecm_qsim;
-using Catch::Approx;
 using std::numbers::pi;
 
 namespace {
@@ -23,28 +22,6 @@ namespace {
 using cd = std::complex<double>;
 
 constexpr cd kI{0.0, 1.0};
-
-// Absolute tolerance only: epsilon(0) disables Approx's default relative
-// tolerance, which would otherwise also be accepted.
-Approx near(double expected) {
-  return Approx(expected).epsilon(0).margin(1e-12);
-}
-
-// Entrywise comparison. Eigen's isApprox is relative, which is meaningless
-// when the expected matrix is mostly zeros.
-void require_close(const Eigen::MatrixXcd& actual,
-                   const Eigen::MatrixXcd& expected) {
-  INFO("actual:\n" << actual << "\nexpected:\n" << expected);
-  REQUIRE(actual.rows() == expected.rows());
-  REQUIRE(actual.cols() == expected.cols());
-  for (Eigen::Index row = 0; row < actual.rows(); ++row) {
-    for (Eigen::Index col = 0; col < actual.cols(); ++col) {
-      CAPTURE(row, col);
-      REQUIRE(actual(row, col).real() == near(expected(row, col).real()));
-      REQUIRE(actual(row, col).imag() == near(expected(row, col).imag()));
-    }
-  }
-}
 
 Eigen::Matrix2cd m2(cd a, cd b, cd c, cd d) {
   Eigen::Matrix2cd m;
