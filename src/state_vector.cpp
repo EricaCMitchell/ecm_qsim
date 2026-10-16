@@ -87,6 +87,14 @@ int qubits_for_size(Eigen::Index size) {
   return std::countr_zero(static_cast<std::uint64_t>(size));
 }
 
+void check_qubit(int qubit, int n_qubits, const char* where) {
+  if (qubit < 0 || qubit >= n_qubits) {
+    throw std::out_of_range(std::string(where) + ": qubit " +
+                            std::to_string(qubit) + " out of range for " +
+                            std::to_string(n_qubits) + " qubits");
+  }
+}
+
 }  // namespace
 
 StateVector::StateVector(int n_qubits)
@@ -120,6 +128,23 @@ Eigen::VectorXcd StateVector::to_vector() const {
 
 Eigen::VectorXd StateVector::probabilities() const {
   return amplitudes_.cwiseAbs2();
+}
+
+void StateVector::apply_1q(const Eigen::Matrix2cd& u, int k) {
+  check_qubit(k, n_qubits_, "apply_1q");
+  const std::uint64_t bit = std::uint64_t{1} << k;
+  const std::uint64_t dim = size();
+  for (std::uint64_t i = 0; i < dim; ++i) {
+    if ((i & bit) != 0) {
+      continue;
+    }
+    const auto i0 = static_cast<Eigen::Index>(i);
+    const auto i1 = static_cast<Eigen::Index>(i + bit);
+    const Eigen::Vector2cd out =
+        u * Eigen::Vector2cd(amplitudes_(i0), amplitudes_(i1));
+    amplitudes_(i0) = out(0);
+    amplitudes_(i1) = out(1);
+  }
 }
 
 std::string StateVector::to_string() const {

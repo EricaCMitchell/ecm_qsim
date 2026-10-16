@@ -41,6 +41,11 @@ public:
   // |amplitude|^2 for each basis state.
   Eigen::VectorXd probabilities() const;
 
+  // Applies u to qubit k in place: for each i with bit k clear,
+  // (psi[i], psi[i + 2^k]) <- u * (psi[i], psi[i + 2^k]).
+  // Throws std::out_of_range unless 0 <= k < n_qubits().
+  void apply_1q(const Eigen::Matrix2cd& u, int k);
+
   // One line "|<bitstring>>  p=<4 decimals>" per basis state, in index
   // order. States with negligible probability are omitted.
   std::string to_string() const;
