@@ -24,8 +24,12 @@ target_include_directories(ecm_qsim_core PUBLIC include)
 target_link_libraries(ecm_qsim_core PUBLIC Eigen3::Eigen)
 target_compile_options(ecm_qsim_core PRIVATE -Wall -Wextra -Wpedantic)
 
+add_library(ecm_qsim_cli src/cli.cpp)
+target_link_libraries(ecm_qsim_cli PUBLIC ecm_qsim_core)
+target_compile_options(ecm_qsim_cli PRIVATE -Wall -Wextra -Wpedantic)
+
 add_executable(sim src/main.cpp)
-target_link_libraries(sim PRIVATE ecm_qsim_core)
+target_link_libraries(sim PRIVATE ecm_qsim_cli)
 target_compile_options(sim PRIVATE -Wall -Wextra -Wpedantic)
 
 option(ECM_QSIM_BUILD_TESTS "Build the C++ unit tests" ON)
