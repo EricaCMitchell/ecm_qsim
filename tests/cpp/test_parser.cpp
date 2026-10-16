@@ -71,7 +71,12 @@ struct StringMaker<ecm_qsim::Op> {
 TEST_CASE("QUBITS declares the qubit count") {
   const Circuit c = parse("QUBITS 3\n");
   CHECK(c.n_qubits == 3);
-  CHECK(c.timesteps.empty());
+}
+
+TEST_CASE("End of file closes an empty initial time step") {
+  const Circuit c = parse("QUBITS 3\n");
+  REQUIRE(c.timesteps.size() == 1);
+  CHECK(c.timesteps[0].ops.empty());
 }
 
 TEST_CASE("QUBITS accepts the maximum qubit count") {

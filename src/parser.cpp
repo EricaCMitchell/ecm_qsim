@@ -190,9 +190,9 @@ public:
     if (header_line_ == 0) {
       throw ParseError(line_ + 1, "missing 'QUBITS n' declaration");
     }
-    // A trailing TICK already closed the last step; only an open step with
-    // gates is closed by end of file, so no phantom all-idle step is added.
-    if (!current_.ops.empty()) {
+    // A trailing TICK already closed the last step. Otherwise EOF closes the
+    // current step, including an empty initial step after QUBITS.
+    if (close_step_at_eof_) {
       circuit_.timesteps.push_back(std::move(current_));
     }
     return std::move(circuit_);
@@ -230,6 +230,7 @@ private:
     circuit_.n_qubits = static_cast<int>(*n);
     used_on_line_.assign(circuit_.n_qubits, 0);
     header_line_ = line_;
+    close_step_at_eof_ = true;
   }
 
   void parse_statement(const Tokens& tokens) {
@@ -241,6 +242,7 @@ private:
       circuit_.timesteps.push_back(std::move(current_));
       current_ = TimeStep{};
       std::fill(used_on_line_.begin(), used_on_line_.end(), 0);
+      close_step_at_eof_ = false;
       return;
     }
     parse_gate(tokens);
@@ -271,6 +273,7 @@ private:
       claim(op.qubits[i]);
     }
     current_.ops.push_back(op);
+    close_step_at_eof_ = true;
   }
 
   double parse_theta(std::string_view token) const {
@@ -307,6 +310,7 @@ private:
   std::istream& in_;
   int line_ = 0;
   int header_line_ = 0;  // 0 until QUBITS is seen
+  bool close_step_at_eof_ = false;
   Circuit circuit_{};
   TimeStep current_;
   std::vector<int> used_on_line_;  // per qubit: line of its gate this step
