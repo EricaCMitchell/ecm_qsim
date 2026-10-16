@@ -1,6 +1,7 @@
 #include <unistd.h>
 
 #include <Eigen/Core>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -79,6 +80,31 @@ Eigen::MatrixXcd random_matrix(Eigen::Index rows, Eigen::Index cols,
 
 Eigen::VectorXcd random_state(int n, std::mt19937_64& rng) {
   return random_matrix(Eigen::Index{1} << n, 1, rng);
+}
+
+// |a><b| on one qubit.
+Eigen::Matrix2cd outer(int a, int b) {
+  Eigen::Matrix2cd e = Eigen::Matrix2cd::Zero();
+  e(a, b) = 1.0;
+  return e;
+}
+
+// The 2^n x 2^n operator of m on qubits (j, k), built without the kernel's
+// index arithmetic: the sum over entries m(r, c) of |r_j><c_j| on qubit j
+// (x) |r_k><c_k| on qubit k, identity elsewhere. r_j is the high bit of r,
+// matching matrix_2q's row order (first-listed qubit, second-listed qubit).
+Eigen::MatrixXcd embed_2q(const Eigen::Matrix4cd& m, int j, int k, int n) {
+  const Eigen::Index dim = Eigen::Index{1} << n;
+  Eigen::MatrixXcd result = Eigen::MatrixXcd::Zero(dim, dim);
+  for (int r = 0; r < 4; ++r) {
+    for (int c = 0; c < 4; ++c) {
+      std::vector<Eigen::Matrix2cd> factors(static_cast<std::size_t>(n), kId2);
+      factors[static_cast<std::size_t>(j)] = outer(r >> 1, c >> 1);
+      factors[static_cast<std::size_t>(k)] = outer(r & 1, c & 1);
+      result += m(r, c) * kron_all(factors);
+    }
+  }
+  return result;
 }
 
 }  // namespace
@@ -277,4 +303,132 @@ TEST_CASE("apply_1q rejects a qubit outside the state") {
   StateVector state(3);
   const Eigen::Matrix2cd x = matrix_1q(GateType::X);
   REQUIRE_THROWS_AS(state.apply_1q(x, k), std::out_of_range);
+}
+
+TEST_CASE("Oracle: on 2 qubits, embed_2q(m, 1, 0) is m itself") {
+  // Qubit 1 is the high bit of the 4-entry index, as j is in m.
+  std::mt19937_64 rng(kSeed);
+  const Eigen::Matrix4cd m = random_matrix(4, 4, rng);
+  require_close(embed_2q(m, 1, 0, 2), m);
+}
+
+TEST_CASE("Oracle: CNOT 0 2 on 3 qubits swaps 1<->5 and 3<->7") {
+  Eigen::MatrixXcd expected = Eigen::MatrixXcd::Identity(8, 8);
+  expected.row(1).swap(expected.row(5));
+  expected.row(3).swap(expected.row(7));
+  require_close(embed_2q(matrix_2q(GateType::CNOT), 0, 2, 3), expected);
+}
+
+TEST_CASE("apply_2q matches the oracle for every ordered qubit pair") {
+  std::mt19937_64 rng(kSeed);
+  for (int n = 2; n <= 5; ++n) {
+    for (int j = 0; j < n; ++j) {
+      for (int k = 0; k < n; ++k) {
+        if (j == k) {
+          continue;
+        }
+        CAPTURE(n, j, k);
+        const Eigen::VectorXcd psi = random_state(n, rng);
+        const Eigen::Matrix4cd m = random_matrix(4, 4, rng);
+        StateVector state(psi);
+        state.apply_2q(m, j, k);
+        require_close(state.to_vector(), embed_2q(m, j, k, n) * psi);
+      }
+    }
+  }
+}
+
+TEST_CASE("Worked example: CNOT 0 2 swaps psi[1]<->psi[5], psi[3]<->psi[7]") {
+  StateVector state(vec({1, 2, 3, 4, 5, 6, 7, 8}));
+  state.apply_2q(matrix_2q(GateType::CNOT), 0, 2);
+  require_close(state.to_vector(), vec({1, 6, 3, 8, 5, 2, 7, 4}));
+}
+
+TEST_CASE("CNOT with the control above the target") {
+  const Eigen::Matrix4cd cnot = matrix_2q(GateType::CNOT);
+  // CNOT 2 0 on |100>: control (qubit 2) is 1, so qubit 0 flips.
+  StateVector flipped(Eigen::VectorXcd::Unit(8, 4));
+  flipped.apply_2q(cnot, 2, 0);
+  REQUIRE(flipped.to_string() == "|101>  p=1.0000\n");
+  // CNOT 2 0 on |001>: control is 0, so nothing changes.
+  StateVector unchanged(Eigen::VectorXcd::Unit(8, 1));
+  unchanged.apply_2q(cnot, 2, 0);
+  REQUIRE(unchanged.to_string() == "|001>  p=1.0000\n");
+}
+
+TEST_CASE("H and two CNOTs make the 3-qubit GHZ state") {
+  StateVector state(3);
+  state.apply_1q(matrix_1q(GateType::H), 0);
+  state.apply_2q(matrix_2q(GateType::CNOT), 0, 1);
+  state.apply_2q(matrix_2q(GateType::CNOT), 1, 2);
+  REQUIRE(state.to_string() == "|000>  p=0.5000\n|111>  p=0.5000\n");
+}
+
+TEST_CASE("apply_2q then the adjoint restores the state") {
+  const GateType gate = GENERATE(GateType::CNOT, GateType::CZ, GateType::CY);
+  CAPTURE(gate);
+  std::mt19937_64 rng(kSeed);
+  const Eigen::VectorXcd psi = random_state(3, rng);
+  const Eigen::Matrix4cd m = matrix_2q(gate);
+  for (int j = 0; j < 3; ++j) {
+    for (int k = 0; k < 3; ++k) {
+      if (j == k) {
+        continue;
+      }
+      CAPTURE(j, k);
+      StateVector state(psi);
+      state.apply_2q(m, j, k);
+      state.apply_2q(m.adjoint(), j, k);
+      require_close(state.to_vector(), psi);
+    }
+  }
+}
+
+TEST_CASE("Every gate keeps the total probability within 1e-12 of 1") {
+  // 500 random gates of every type on random qubits, with controls both
+  // above and below their targets. probabilities() is what sample_index
+  // receives, so its sum is checked after each gate: a kernel that loses
+  // norm fails at the gate that caused it, and rounding drift fails as soon
+  // as it passes 1e-12.
+  constexpr int kQubits = 6;
+  constexpr int kGates = 500;
+  constexpr std::array kOneQubit = {GateType::X,  GateType::Y,  GateType::Z,
+                                    GateType::H,  GateType::S,  GateType::T,
+                                    GateType::RX, GateType::RY, GateType::RZ};
+  constexpr std::array kTwoQubit = {GateType::CNOT, GateType::CZ, GateType::CY};
+  std::mt19937_64 rng(kSeed);
+  std::bernoulli_distribution pick_two_qubit(0.5);
+  std::uniform_int_distribution<std::size_t> one_qubit_gate(
+      0, kOneQubit.size() - 1);
+  std::uniform_int_distribution<std::size_t> two_qubit_gate(
+      0, kTwoQubit.size() - 1);
+  std::uniform_int_distribution<int> qubit(0, kQubits - 1);
+  std::uniform_real_distribution<double> angle(0.0, 2 * std::numbers::pi);
+  StateVector state(kQubits);
+  for (int g = 0; g < kGates; ++g) {
+    const bool two_qubit = pick_two_qubit(rng);
+    const GateType gate = two_qubit ? kTwoQubit[two_qubit_gate(rng)]
+                                    : kOneQubit[one_qubit_gate(rng)];
+    const int j = qubit(rng);
+    int k = j;  // second qubit; equal to j for a one-qubit gate
+    if (two_qubit) {
+      while (k == j) {
+        k = qubit(rng);
+      }
+      state.apply_2q(matrix_2q(gate), j, k);
+    } else {
+      state.apply_1q(matrix_1q(gate, angle(rng)), j);
+    }
+    CAPTURE(g, static_cast<int>(gate), j, k);
+    REQUIRE(state.probabilities().sum() == near(1.0));
+  }
+}
+
+TEST_CASE("apply_2q rejects bad qubit pairs") {
+  StateVector state(3);
+  const Eigen::Matrix4cd cnot = matrix_2q(GateType::CNOT);
+  REQUIRE_THROWS_AS(state.apply_2q(cnot, 1, 1), std::invalid_argument);
+  REQUIRE_THROWS_AS(state.apply_2q(cnot, 0, 3), std::out_of_range);
+  REQUIRE_THROWS_AS(state.apply_2q(cnot, -1, 0), std::out_of_range);
+  REQUIRE_THROWS_AS(state.apply_2q(cnot, 3, 0), std::out_of_range);
 }

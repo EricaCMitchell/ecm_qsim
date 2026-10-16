@@ -46,6 +46,13 @@ public:
   // Throws std::out_of_range unless 0 <= k < n_qubits().
   void apply_1q(const Eigen::Matrix2cd& u, int k);
 
+  // Applies m to qubits j and k in place. j is the high bit of m's row index
+  // (for CNOT c t, j = c): for each i with bits j and k clear, applies m to
+  // (psi[i], psi[i + 2^k], psi[i + 2^j], psi[i + 2^j + 2^k]).
+  // Throws std::out_of_range if j or k is not a qubit, std::invalid_argument
+  // if j == k.
+  void apply_2q(const Eigen::Matrix4cd& m, int j, int k);
+
   // One line "|<bitstring>>  p=<4 decimals>" per basis state, in index
   // order. States with negligible probability are omitted.
   std::string to_string() const;

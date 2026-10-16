@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <complex>
 #include <cstddef>
@@ -144,6 +145,36 @@ void StateVector::apply_1q(const Eigen::Matrix2cd& u, int k) {
         u * Eigen::Vector2cd(amplitudes_(i0), amplitudes_(i1));
     amplitudes_(i0) = out(0);
     amplitudes_(i1) = out(1);
+  }
+}
+
+void StateVector::apply_2q(const Eigen::Matrix4cd& m, int j, int k) {
+  check_qubit(j, n_qubits_, "apply_2q");
+  check_qubit(k, n_qubits_, "apply_2q");
+  if (j == k) {
+    throw std::invalid_argument("apply_2q: both qubits are " +
+                                std::to_string(j));
+  }
+  const std::uint64_t bit_j = std::uint64_t{1} << j;
+  const std::uint64_t bit_k = std::uint64_t{1} << k;
+  const std::uint64_t dim = size();
+  for (std::uint64_t i = 0; i < dim; ++i) {
+    if ((i & (bit_j | bit_k)) != 0) {
+      continue;
+    }
+    // m's row order: (qubit j, qubit k) = 00, 01, 10, 11.
+    const std::array<Eigen::Index, 4> index = {
+        static_cast<Eigen::Index>(i),
+        static_cast<Eigen::Index>(i + bit_k),
+        static_cast<Eigen::Index>(i + bit_j),
+        static_cast<Eigen::Index>(i + bit_j + bit_k),
+    };
+    const Eigen::Vector4cd out =
+        m * Eigen::Vector4cd(amplitudes_(index[0]), amplitudes_(index[1]),
+                             amplitudes_(index[2]), amplitudes_(index[3]));
+    for (int r = 0; r < 4; ++r) {
+      amplitudes_(index[r]) = out(r);
+    }
   }
 }
 
