@@ -35,7 +35,8 @@ CliResult sim(const std::vector<std::string>& args) {
 }
 
 // Writes text to temp_directory_path() / "ecm_qsim_test_cli" / name and
-// returns the path (creates the directory).
+// returns the path (creates the directory). ctest runs each test case in its
+// own process, possibly in parallel, so each test case uses its own names.
 std::filesystem::path write_circuit(const std::string& name,
                                     const std::string& text) {
   const std::filesystem::path dir =
@@ -106,7 +107,7 @@ TEST_CASE("sim defaults the noise flags to 0") {
 }
 
 TEST_CASE("sim prints one line per outcome, in bitstring order") {
-  const auto x0 = write_circuit("x0.txt", "QUBITS 3\nX 0\n");
+  const auto x0 = write_circuit("order_x0.txt", "QUBITS 3\nX 0\n");
   CHECK(sim({x0.string(), "--shots", "5", "--seed", "1"}).out == "001 5\n");
   // Noiseless GHZ has exactly two outcomes; 000 must come first.
   const std::string out = sim({kGhz, "--shots", "100", "--seed", "1"}).out;
@@ -115,10 +116,10 @@ TEST_CASE("sim prints one line per outcome, in bitstring order") {
 }
 
 TEST_CASE("sim --json prints the counts as one JSON object") {
-  const auto x0 = write_circuit("x0.txt", "QUBITS 3\nX 0\n");
+  const auto x0 = write_circuit("json_x0.txt", "QUBITS 3\nX 0\n");
   CHECK(sim({x0.string(), "--shots", "5", "--seed", "1", "--json"}).out ==
         "{\"counts\": {\"001\": 5}}\n");
-  const auto h0 = write_circuit("h0.txt", "QUBITS 1\nH 0\n");
+  const auto h0 = write_circuit("json_h0.txt", "QUBITS 1\nH 0\n");
   const Counts counts = run(parse_circuit_file(h0), NoiseModel{}, 100, 1);
   REQUIRE(counts.size() == 2);
   CHECK(sim({h0.string(), "--shots", "100", "--seed", "1", "--json"}).out ==
@@ -127,7 +128,7 @@ TEST_CASE("sim --json prints the counts as one JSON object") {
 }
 
 TEST_CASE("sim accepts options before the path") {
-  const auto x0 = write_circuit("x0.txt", "QUBITS 3\nX 0\n");
+  const auto x0 = write_circuit("options_first_x0.txt", "QUBITS 3\nX 0\n");
   CHECK(sim({"--seed", "1", "--shots", "5", x0.string()}).out == "001 5\n");
 }
 
