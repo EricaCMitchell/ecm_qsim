@@ -16,6 +16,7 @@ add_library(ecm_qsim_core
   src/parser.cpp
   src/gates.cpp
   src/state_vector.cpp
+  src/measurement.cpp
   src/noise.cpp
   src/simulator.cpp
 )
