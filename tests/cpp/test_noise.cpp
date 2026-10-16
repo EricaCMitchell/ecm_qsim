@@ -286,3 +286,75 @@ TEST_CASE("sample_pauli_errors rejects an invalid noise model") {
       sample_pauli_errors(kCnotCircuit, NoiseModel{0, std::nan(""), 0}, rng),
       ContainsSubstring("p_idle must be in [0, 1]"));
 }
+
+TEST_CASE("flip_readout_bits with p = 0 returns the index and draws nothing") {
+  Rng rng(kSeed);
+  const Rng before = rng;
+  CHECK(flip_readout_bits(0b101, 3, 0.0, rng) == 0b101);
+  CHECK(rng == before);
+}
+
+TEST_CASE("flip_readout_bits with p = 1 flips every bit") {
+  Rng rng(kSeed);
+  CHECK(flip_readout_bits(0b101, 3, 1.0, rng) == 0b010);
+  CHECK(flip_readout_bits(0, 1, 1.0, rng) == 1);
+  CHECK(flip_readout_bits(0, kMaxQubits, 1.0, rng) ==
+        (std::uint64_t{1} << 63) - 1);
+}
+
+TEST_CASE("flip_readout_bits flips each bit at rate p") {
+  constexpr std::uint64_t kIndex = 0b101;
+  Rng rng(kSeed);
+  int counts[3] = {0, 0, 0};
+  for (int trial = 0; trial < kTrials; ++trial) {
+    const std::uint64_t flipped =
+        flip_readout_bits(kIndex, 3, 0.25, rng) ^ kIndex;
+    for (int k = 0; k < 3; ++k) {
+      if ((flipped >> k) & 1) {
+        ++counts[k];
+      }
+    }
+  }
+  for (int k = 0; k < 3; ++k) {
+    CAPTURE(k);
+    require_binomial(counts[k], kTrials, 0.25);
+  }
+}
+
+TEST_CASE("flip_readout_bits flips bits independently") {
+  // One draw that flips all bits together gives 0.25.
+  constexpr std::uint64_t kIndex = 0b101;
+  Rng rng(kSeed);
+  int both = 0;
+  for (int trial = 0; trial < kTrials; ++trial) {
+    const std::uint64_t flipped =
+        flip_readout_bits(kIndex, 3, 0.25, rng) ^ kIndex;
+    if ((flipped & 0b101) == 0b101) {
+      ++both;
+    }
+  }
+  require_binomial(both, kTrials, 0.25 * 0.25);
+}
+
+TEST_CASE("flip_readout_bits uses the fixed draw order") {
+  // 5 draws; only the 4th (bit 3) fires. A reversed draw order flips bit 1.
+  Rng rng(kSeed);
+  CHECK(flip_readout_bits(0b10110, 5, 0.5, rng) == 0b11110);
+  Rng expected_rng(kSeed);
+  for (int draw = 0; draw < 5; ++draw) {
+    static_cast<void>(expected_rng());
+  }
+  CHECK(rng == expected_rng);
+}
+
+TEST_CASE("flip_readout_bits rejects bad arguments") {
+  Rng rng(kSeed);
+  CHECK_THROWS_WITH(flip_readout_bits(0, 3, 1.5, rng),
+                    "p_readout must be in [0, 1], got 1.5");
+  CHECK_THROWS_AS(flip_readout_bits(0, 3, std::nan(""), rng),
+                  std::invalid_argument);
+  CHECK_THROWS_AS(flip_readout_bits(0, 0, 0.1, rng), std::invalid_argument);
+  CHECK_THROWS_AS(flip_readout_bits(0, kMaxQubits + 1, 0.1, rng),
+                  std::invalid_argument);
+  CHECK_THROWS_AS(flip_readout_bits(8, 3, 0.1, rng), std::out_of_range);
+}

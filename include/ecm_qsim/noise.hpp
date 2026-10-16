@@ -43,6 +43,14 @@ struct PauliError {
 std::vector<PauliError> sample_pauli_errors(const Circuit& circuit,
                                             const NoiseModel& noise, Rng& rng);
 
+// Flips each of the n_qubits low bits of index independently with
+// probability p_readout, drawing for qubit 0 first. No draws if p_readout
+// is 0. Throws std::invalid_argument if p_readout is not in [0, 1] or
+// n_qubits is not in 1..kMaxQubits, std::out_of_range if
+// index >= 2^n_qubits.
+std::uint64_t flip_readout_bits(std::uint64_t index, int n_qubits,
+                                double p_readout, Rng& rng);
+
 }  // namespace ecm_qsim
 
 #endif  // ECM_QSIM_NOISE_HPP_

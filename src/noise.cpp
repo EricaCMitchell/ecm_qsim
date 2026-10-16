@@ -23,6 +23,14 @@ void check_probability(const char* name, double p) {
   }
 }
 
+void check_qubit_count(const char* name, int n_qubits) {
+  if (n_qubits < 1 || n_qubits > kMaxQubits) {
+    throw std::invalid_argument(std::string(name) + " must be in [1, " +
+                                std::to_string(kMaxQubits) + "], got " +
+                                std::to_string(n_qubits));
+  }
+}
+
 void check_qubit(int qubit, int n_qubits) {
   if (qubit < 0 || qubit >= n_qubits) {
     throw std::out_of_range("qubit " + std::to_string(qubit) +
@@ -69,11 +77,7 @@ std::vector<PauliError> sample_pauli_errors(const Circuit& circuit,
   // unchanged.
   validate_noise_model(noise);
   const int n = circuit.n_qubits;
-  if (n < 1 || n > kMaxQubits) {
-    throw std::invalid_argument("circuit.n_qubits must be in [1, " +
-                                std::to_string(kMaxQubits) + "], got " +
-                                std::to_string(n));
-  }
+  check_qubit_count("circuit.n_qubits", n);
   for (const TimeStep& step : circuit.timesteps) {
     for (const Op& op : step.ops) {
       check_qubit(op.qubits[0], n);
@@ -104,6 +108,24 @@ std::vector<PauliError> sample_pauli_errors(const Circuit& circuit,
     }
   }
   return errors;
+}
+
+std::uint64_t flip_readout_bits(std::uint64_t index, int n_qubits,
+                                double p_readout, Rng& rng) {
+  check_probability("p_readout", p_readout);
+  check_qubit_count("n_qubits", n_qubits);
+  // n_qubits <= 63, so the shift is defined.
+  if (index >> n_qubits != 0) {
+    throw std::out_of_range("index " + std::to_string(index) +
+                            " out of range for " + std::to_string(n_qubits) +
+                            " qubits");
+  }
+  for (int k = 0; k < n_qubits; ++k) {
+    if (occurs(p_readout, rng)) {
+      index ^= std::uint64_t{1} << k;
+    }
+  }
+  return index;
 }
 
 }  // namespace ecm_qsim
