@@ -12,6 +12,28 @@ namespace ecm_qsim {
 
 enum class GateType { X, Y, Z, H, S, T, RX, RY, RZ, CNOT, CZ, CY };
 
+// True for the controlled gates, which act on qubits[0] and qubits[1]. No
+// default case, so -Wswitch flags a gate added later.
+constexpr bool is_two_qubit(GateType gate) noexcept {
+  switch (gate) {
+    case GateType::X:
+    case GateType::Y:
+    case GateType::Z:
+    case GateType::H:
+    case GateType::S:
+    case GateType::T:
+    case GateType::RX:
+    case GateType::RY:
+    case GateType::RZ:
+      return false;
+    case GateType::CNOT:
+    case GateType::CZ:
+    case GateType::CY:
+      return true;
+  }
+  return false;
+}
+
 struct Op {
   GateType gate;
   // Control first for two-qubit gates; [1] is 0 and unused for one-qubit

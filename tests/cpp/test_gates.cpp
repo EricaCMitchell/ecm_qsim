@@ -244,3 +244,18 @@ TEST_CASE("matrix_2q rejects gates that are not two-qubit gates") {
   REQUIRE_THROWS_AS(matrix_2q(gate), std::invalid_argument);
   REQUIRE_THROWS_WITH(matrix_2q(gate), "matrix_2q: not a two-qubit gate");
 }
+
+TEST_CASE("is_two_qubit agrees with matrix_1q and matrix_2q") {
+  // Every enumerator, from X to CY (the last one).
+  for (int i = 0; i <= static_cast<int>(GateType::CY); ++i) {
+    const auto gate = static_cast<GateType>(i);
+    CAPTURE(i);
+    if (is_two_qubit(gate)) {
+      CHECK_THROWS_AS(matrix_1q(gate), std::invalid_argument);
+      CHECK_NOTHROW(matrix_2q(gate));
+    } else {
+      CHECK_NOTHROW(matrix_1q(gate));
+      CHECK_THROWS_AS(matrix_2q(gate), std::invalid_argument);
+    }
+  }
+}
