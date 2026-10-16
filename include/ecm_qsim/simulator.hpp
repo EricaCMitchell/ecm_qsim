@@ -3,6 +3,9 @@
 
 // simulate(): one trajectory with given errors. run(): shots -> counts.
 
+#include <cstdint>
+#include <map>
+#include <string>
 #include <vector>
 
 #include "ecm_qsim/circuit.hpp"
@@ -23,6 +26,23 @@ namespace ecm_qsim {
 // std::out_of_range for a qubit outside the register.
 StateVector simulate(const Circuit& circuit,
                      const std::vector<PauliError>& errors);
+
+// Measurement histogram: n-character bitstring (most significant bit
+// first, qubit 0 rightmost) -> number of shots. Sorted, so the order of
+// outcomes is fixed.
+using Counts = std::map<std::string, int>;
+
+// Runs shots Monte Carlo trajectories and counts the measured
+// bitstrings. One Rng is seeded with seed. Each shot draws from it in
+// this order: sample_pauli_errors, one draw for the measurement
+// (uniform_from_bits), flip_readout_bits. Every shot starts from
+// |0...0>.
+// Throws std::invalid_argument if shots < 1 or a noise probability is not
+// in [0, 1], both checked before any work. Errors from sample_pauli_errors
+// and simulate propagate (std::length_error if the register does not fit
+// in memory).
+Counts run(const Circuit& circuit, const NoiseModel& noise, int shots,
+           std::uint64_t seed);
 
 }  // namespace ecm_qsim
 

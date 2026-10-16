@@ -36,6 +36,13 @@ pytest tests/python
 build/sim examples/ghz3.txt --shots 1000 --p-gate 0.001 --p-idle 0.001 --p-readout 0.01 --seed 1
 ```
 
+## Reproducibility
+
+A seed gives the same random draws on every platform. The generator is `std::mt19937_64`, and the
+simulator uses no `std::` distributions, whose output depends on the standard library. Counts can
+differ between compilers only when a draw falls within rounding error of the boundary between two
+outcomes.
+
 ## Layout
 
 ```text
