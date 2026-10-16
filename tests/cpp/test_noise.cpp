@@ -12,6 +12,7 @@
 
 #include "ecm_qsim/circuit.hpp"
 #include "ecm_qsim/noise.hpp"
+#include "stat_helpers.hpp"
 
 using namespace ecm_qsim;
 using Catch::Matchers::ContainsSubstring;
@@ -20,14 +21,6 @@ namespace {
 
 constexpr std::uint64_t kSeed = 42;
 constexpr int kTrials = 100000;
-
-// |count - trials * p| within 5 binomial standard deviations.
-void require_binomial(int count, int trials, double p) {
-  const double mean = trials * p;
-  const double sigma = std::sqrt(trials * p * (1 - p));
-  CAPTURE(count, trials, p, mean, sigma);
-  REQUIRE(std::abs(count - mean) <= 5 * sigma);
-}
 
 // In both circuits the gate's qubits are busy and the other qubits are idle.
 // kH2Circuit leaves qubit 0 idle next to a one-qubit gate, which catches a
