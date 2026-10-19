@@ -17,3 +17,6 @@ __pycache__/
 
 # Experiment output
 experiments/*.png
+
+# Benchmark circuits
+benchmarks/circuits/

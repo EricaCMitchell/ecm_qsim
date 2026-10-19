@@ -79,6 +79,19 @@ $P experiments/idle_noise.py --p-idle 0.9 --m $(seq -s ' ' 0 10) \
     --out experiments/figures/idle_noise_p0.9.png
 ```
 
+### Brickwork benchmark circuits
+
+```sh
+.venv/bin/python benchmarks/brickwork_generator.py --qubits 12 --depth 20
+```
+
+Each of the `--depth` layers is one time step of `RY` with a random angle on every qubit, then
+one time step of CNOTs on neighbouring pairs: `(0, 1), (2, 3), …` in odd layers and
+`(1, 2), (3, 4), …` in even layers. The script writes
+`benchmarks/circuits/brickwork_n<n>_d<D>.txt` (`--out` to change) and prints the path. These
+files are not committed. Each run draws new angles unless `--seed` is given; the seed is written
+in the file header.
+
 ## Circuit format
 
 The first non-comment statement declares the number of qubits:
@@ -128,8 +141,9 @@ include/ecm_qsim/   public headers
 src/                library sources and the sim CLI (main.cpp)
 tests/cpp/          C++ unit tests (Catch2)
 tests/python/       Python tests (pytest)
-python/ecm_qsim/    Python tooling: sim subprocess wrapper, idle-noise model and fit
-benchmarks/         reserved benchmark-results directory
+python/ecm_qsim/    Python tooling: sim subprocess wrapper, idle-noise model and fit,
+                    brickwork circuits
+benchmarks/         brickwork circuit generator and benchmark results
 experiments/        experiment scripts and figures
 examples/           example circuits
 ```
