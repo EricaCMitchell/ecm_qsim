@@ -3,6 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from ecm_qsim import brickwork
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,18 +46,23 @@ def test_script_without_seed_gives_new_angles_each_run(tmp_path):
 
 def test_script_default_path_ignores_working_directory(tmp_path):
     expected = REPO_ROOT / "benchmarks" / "circuits" / "brickwork_n3_d1.txt"
+    previous = expected.read_bytes() if expected.exists() else None
     try:
         result = run_script("--qubits", "3", "--depth", "1", "--seed", "1", cwd=tmp_path)
         assert result.returncode == 0, result.stderr
         assert expected.read_text() == brickwork.brickwork_circuit(3, 1, 1)
         assert list(tmp_path.iterdir()) == []
     finally:
-        expected.unlink(missing_ok=True)
+        if previous is None:
+            expected.unlink(missing_ok=True)
+        else:
+            expected.write_bytes(previous)
 
 
-def test_script_rejects_invalid_qubits(tmp_path):
+@pytest.mark.parametrize("qubits", ["1", "64"])
+def test_script_rejects_invalid_qubits(tmp_path, qubits):
     out = tmp_path / "c.txt"
-    result = run_script("--qubits", "1", "--out", str(out))
+    result = run_script("--qubits", qubits, "--out", str(out))
     assert result.returncode == 2
     assert "qubits" in result.stderr
     assert not out.exists()

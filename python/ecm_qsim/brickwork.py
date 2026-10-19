@@ -7,6 +7,8 @@ on neighbouring pairs. Odd layers pair (0, 1), (2, 3), ...; even layers pair
 
 import numpy as np
 
+MAX_QUBITS = 63
+
 
 def brickwork_circuit(n: int, depth: int, seed: int) -> str:
     """Circuit text for n qubits and depth layers, with angles drawn from seed.
@@ -16,6 +18,8 @@ def brickwork_circuit(n: int, depth: int, seed: int) -> str:
     """
     if n < 2:
         raise ValueError(f"need at least 2 qubits, got {n}")
+    if n > MAX_QUBITS:
+        raise ValueError(f"need at most {MAX_QUBITS} qubits, got {n}")
     if depth < 1:
         raise ValueError(f"depth must be at least 1, got {depth}")
 

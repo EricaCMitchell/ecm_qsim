@@ -87,6 +87,16 @@ def test_rejects_too_few_qubits_or_layers(n, depth):
         brickwork.brickwork_circuit(n, depth, seed=1)
 
 
+def test_rejects_qubit_count_above_simulator_limit():
+    with pytest.raises(ValueError, match="at most 63 qubits"):
+        brickwork.brickwork_circuit(64, 1, seed=1)
+
+
+def test_accepts_simulator_maximum_qubit_count():
+    text = brickwork.brickwork_circuit(63, 1, seed=1)
+    assert text.splitlines()[1] == "QUBITS 63"
+
+
 @needs_sim
 def test_circuit_runs_in_sim():
     counts = sim.run(brickwork.brickwork_circuit(4, 20, seed=1), shots=10, seed=1)
