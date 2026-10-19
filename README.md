@@ -40,6 +40,36 @@ circuit cannot be read or run, and 2 for invalid arguments.
 each active or idle qubit after a time step. `--p-readout` is the independent probability of
 flipping each measured bit. All probabilities must be in `[0, 1]`.
 
+## Python tooling
+
+The Python package in `python/` runs `build/sim` as a subprocess. Install it in a virtual
+environment at the repository root:
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -e './python[dev]'
+.venv/bin/pytest tests/python
+```
+
+Set `ECM_QSIM_SIM` to use a `sim` binary at a different path. Tests that need the binary are
+skipped if it is not built.
+
+### Idle-noise experiment
+
+```sh
+.venv/bin/python experiments/idle_noise.py --p-idle 0.01 --p-readout 0.01 --shots 10000
+```
+
+The script prepares one qubit in 1, leaves it idle for `m` time steps with `p_gate = 0`, and
+measures it. It fits `p_idle` to the fraction of shots that return 1, with `p_readout` known:
+
+    p(m) = 1/2 + (1 - 2 p_readout)/2 * (1 - 4 p_idle / 3)^m
+
+An X or Y error flips the bit and a Z error does not, so each idle step flips the bit with
+probability `2 p_idle / 3`. The script prints the data, the fitted `p_idle` with its standard
+error, and the stderr predicted before the run. It saves the figure to
+`experiments/idle_noise.png` (`--out` to change). Use `--m` to give the idle step counts.
+
 ## Circuit format
 
 The first non-comment statement declares the number of qubits:
@@ -88,12 +118,9 @@ outcomes.
 include/ecm_qsim/   public headers
 src/                library sources and the sim CLI (main.cpp)
 tests/cpp/          C++ unit tests (Catch2)
-tests/python/       reserved for future Python tests (currently empty)
-python/ecm_qsim/    Python package scaffold (no tooling implemented yet)
+tests/python/       Python tests (pytest)
+python/ecm_qsim/    Python tooling: sim subprocess wrapper, idle-noise model and fit
 benchmarks/         reserved benchmark-results directory
-experiments/        reserved experiments directory
+experiments/        experiment scripts
 examples/           example circuits
 ```
-
-Python packaging metadata exists under `python/`, but the repository does not currently contain
-Python utilities or Python tests.
