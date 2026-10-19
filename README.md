@@ -70,6 +70,15 @@ probability `2 p_idle / 3`. The script prints the data, the fitted `p_idle` with
 error, and the stderr predicted before the run. It saves the figure to
 `experiments/idle_noise.png` (`--out` to change). Use `--m` to give the idle step counts.
 
+The figures in `experiments/figures/` come from these commands:
+
+```sh
+P=.venv/bin/python
+$P experiments/idle_noise.py --p-idle 0.01 --out experiments/figures/idle_noise_p0.01.png
+$P experiments/idle_noise.py --p-idle 0.9 --m $(seq -s ' ' 0 10) \
+    --out experiments/figures/idle_noise_p0.9.png
+```
+
 ## Circuit format
 
 The first non-comment statement declares the number of qubits:
@@ -121,6 +130,6 @@ tests/cpp/          C++ unit tests (Catch2)
 tests/python/       Python tests (pytest)
 python/ecm_qsim/    Python tooling: sim subprocess wrapper, idle-noise model and fit
 benchmarks/         reserved benchmark-results directory
-experiments/        experiment scripts
+experiments/        experiment scripts and figures
 examples/           example circuits
 ```
