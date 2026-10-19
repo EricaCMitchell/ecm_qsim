@@ -31,21 +31,22 @@ def plot(
     out: Path,
 ) -> None:
     """Saves the data with the fitted and injected curves."""
-    m_smooth = np.linspace(0, data.m.max(), 400)
+    # m counts whole time steps, so the curves exist only at whole m.
+    m_curve = np.arange(data.m.max() + 1)
 
     fig, ax = plt.subplots(figsize=(7, 4.5), layout="constrained")
     ax.axhline(0.5, color=MUTED_COLOR, linestyle=":", linewidth=1, label="limit 1/2")
     ax.plot(
-        m_smooth,
-        idle.analytic_p(m_smooth, p_idle, p_readout),
+        m_curve,
+        idle.analytic_p(m_curve, p_idle, p_readout),
         color=INJECTED_COLOR,
         linestyle="--",
         linewidth=1.2,
         label=f"analytic, injected p_idle = {p_idle:g}",
     )
     ax.plot(
-        m_smooth,
-        idle.analytic_p(m_smooth, fit.p_idle, p_readout),
+        m_curve,
+        idle.analytic_p(m_curve, fit.p_idle, p_readout),
         color=FIT_COLOR,
         linewidth=1.5,
         label=f"fit, p_idle = {fit.p_idle:.4g} ± {fit.stderr:.2g}",
