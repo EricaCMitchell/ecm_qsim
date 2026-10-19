@@ -30,15 +30,12 @@ def plot(
     p_readout: float,
     out: Path,
 ) -> None:
-    """Saves the data, the fitted and injected curves, and the residuals."""
+    """Saves the data with the fitted and injected curves."""
     m_smooth = np.linspace(0, data.m.max(), 400)
-    residuals = (data.p - idle.analytic_p(data.m, fit.p_idle, p_readout)) / data.p_stderr
 
-    fig, (top, bottom) = plt.subplots(
-        2, 1, sharex=True, figsize=(7, 5.5), height_ratios=(3, 1), layout="constrained"
-    )
-    top.axhline(0.5, color=MUTED_COLOR, linestyle=":", linewidth=1, label="limit 1/2")
-    top.plot(
+    fig, ax = plt.subplots(figsize=(7, 4.5), layout="constrained")
+    ax.axhline(0.5, color=MUTED_COLOR, linestyle=":", linewidth=1, label="limit 1/2")
+    ax.plot(
         m_smooth,
         idle.analytic_p(m_smooth, p_idle, p_readout),
         color=INJECTED_COLOR,
@@ -46,14 +43,14 @@ def plot(
         linewidth=1.2,
         label=f"analytic, injected p_idle = {p_idle:g}",
     )
-    top.plot(
+    ax.plot(
         m_smooth,
         idle.analytic_p(m_smooth, fit.p_idle, p_readout),
         color=FIT_COLOR,
         linewidth=1.5,
         label=f"fit, p_idle = {fit.p_idle:.4g} ± {fit.stderr:.2g}",
     )
-    top.errorbar(
+    ax.errorbar(
         data.m,
         data.p,
         yerr=data.p_stderr,
@@ -63,22 +60,16 @@ def plot(
         elinewidth=1,
         label=f"simulated, {data.shots[0]} shots (±1 s.e.)",
     )
-    top.set_ylabel("fraction of shots returning 1")
-    top.set_title(
+    ax.set_xlabel("idle steps m")
+    ax.set_ylabel("fraction of shots returning 1")
+    ax.set_title(
         f"Idle noise: p_readout = {p_readout:g} (known), "
         f"χ²/dof = {fit.chi2:.1f}/{fit.dof}",
         color=TEXT_COLOR,
     )
-    top.legend(frameon=False, labelcolor=TEXT_COLOR)
-
-    bottom.axhline(0, color=MUTED_COLOR, linewidth=1)
-    bottom.plot(data.m, residuals, "o", markersize=5, color=DATA_COLOR)
-    bottom.set_xlabel("idle steps m")
-    bottom.set_ylabel("residual / s.e.")
-
-    for ax in (top, bottom):
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.grid(color=MUTED_COLOR, linewidth=0.5, alpha=0.5)
+    ax.legend(frameon=False, labelcolor=TEXT_COLOR)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(color=MUTED_COLOR, linewidth=0.5, alpha=0.5)
     fig.savefig(out, dpi=150)
     plt.close(fig)
 
