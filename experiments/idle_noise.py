@@ -49,7 +49,7 @@ def plot(
         idle.analytic_p(m_curve, fit.p_idle, p_readout),
         color=FIT_COLOR,
         linewidth=1.5,
-        label=f"fit, p_idle = {fit.p_idle:.4g} ± {fit.stderr:.2g}",
+        label=f"fit, p_idle = {fit.p_idle:.4g} ± {fit.stderr:.2g} (1σ)",
     )
     ax.errorbar(
         data.m,
@@ -59,7 +59,7 @@ def plot(
         markersize=5,
         color=DATA_COLOR,
         elinewidth=1,
-        label=f"simulated, {data.shots[0]} shots (±1 s.e.)",
+        label=f"simulated, {data.shots[0]} shots (±1σ)",
     )
     ax.set_xlabel("idle steps m")
     ax.set_ylabel("fraction of shots returning 1")
