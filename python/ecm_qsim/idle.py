@@ -112,7 +112,8 @@ def fit_p_idle(
         raise ValueError("at least one m must be greater than 0")
     sigma = np.broadcast_to(binomial_stderr(p, shots), p.shape)
     # A large start makes the curve flat at every m > 0, so the fit cannot
-    # move. Below 3/4 the curve decays monotonically to 1/2.
+    # move. Above 3/4 the curve alternates about 1/2, and only odd m tell
+    # p_idle from 3/2 - p_idle.
     popt, pcov = curve_fit(
         lambda m, p_idle: analytic_p(m, p_idle, p_readout),
         m,
@@ -120,7 +121,7 @@ def fit_p_idle(
         p0=[1e-6],
         sigma=sigma,
         absolute_sigma=True,
-        bounds=(0, 0.75),
+        bounds=(0, 1),
     )
     p_idle = float(popt[0])
     chi2 = float(np.sum(((p - analytic_p(m, p_idle, p_readout)) / sigma) ** 2))

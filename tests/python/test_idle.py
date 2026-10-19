@@ -54,6 +54,15 @@ def test_fit_recovers_p_idle_across_range(p_idle):
     assert fit.p_idle == pytest.approx(p_idle, rel=1e-4)
 
 
+@pytest.mark.parametrize("p_idle", [0.9, 1.0])
+def test_fit_recovers_p_idle_above_three_quarters(p_idle):
+    # Above 3/4 one idle step flips the bit more often than not.
+    m = np.arange(0, 11)
+    p = idle.analytic_p(m, p_idle, 0.01)
+    fit = idle.fit_p_idle(m, p, 10_000, p_readout=0.01)
+    assert fit.p_idle == pytest.approx(p_idle, rel=1e-4)
+
+
 def test_fit_handles_zero_readout_with_every_shot_returning_one():
     m = np.array([0, 50, 100])
     p = np.array([1.0, 0.76, 0.62])
