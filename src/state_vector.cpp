@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
 #include <complex>
 #include <cstddef>
 #include <cstdint>
@@ -174,6 +175,51 @@ void StateVector::apply_2q(const Eigen::Matrix4cd& m, int j, int k) {
                              amplitudes_(index[2]), amplitudes_(index[3]));
     for (int r = 0; r < 4; ++r) {
       amplitudes_(index[r]) = out(r);
+    }
+  }
+}
+
+void StateVector::apply_ry(double theta, int k) {
+  check_qubit(k, n_qubits_, "apply_ry");
+  const double c = std::cos(theta / 2);
+  const double s = std::sin(theta / 2);
+  const std::uint64_t bit = std::uint64_t{1} << k;
+  const std::uint64_t dim = size();
+  // Blocks of 2 * bit indices: the first half has bit k clear, and its
+  // partners are the second half.
+  for (std::uint64_t block = 0; block < dim; block += 2 * bit) {
+    for (std::uint64_t i = block; i < block + bit; ++i) {
+      const auto i0 = static_cast<Eigen::Index>(i);
+      const auto i1 = static_cast<Eigen::Index>(i + bit);
+      const std::complex<double> a0 = amplitudes_(i0);
+      const std::complex<double> a1 = amplitudes_(i1);
+      amplitudes_(i0) = c * a0 - s * a1;
+      amplitudes_(i1) = s * a0 + c * a1;
+    }
+  }
+}
+
+void StateVector::apply_cnot(int control, int target) {
+  check_qubit(control, n_qubits_, "apply_cnot");
+  check_qubit(target, n_qubits_, "apply_cnot");
+  if (control == target) {
+    throw std::invalid_argument("apply_cnot: both qubits are " +
+                                std::to_string(control));
+  }
+  const std::uint64_t control_bit = std::uint64_t{1} << control;
+  const std::uint64_t target_bit = std::uint64_t{1} << target;
+  const std::uint64_t low_bit = std::min(control_bit, target_bit);
+  const std::uint64_t high_bit = std::max(control_bit, target_bit);
+  const std::uint64_t dim = size();
+  // high_base + middle + offset runs over every index with both gate bits
+  // clear, each once: 2^(n-2) indices.
+  for (std::uint64_t high_base = 0; high_base < dim; high_base += 2 * high_bit) {
+    for (std::uint64_t middle = 0; middle < high_bit; middle += 2 * low_bit) {
+      for (std::uint64_t offset = 0; offset < low_bit; ++offset) {
+        const std::uint64_t i = high_base + middle + offset + control_bit;
+        std::swap(amplitudes_(static_cast<Eigen::Index>(i)),
+                  amplitudes_(static_cast<Eigen::Index>(i + target_bit)));
+      }
     }
   }
 }
