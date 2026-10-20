@@ -145,9 +145,10 @@ $P benchmarks/run_benchmarks.py plot
 Before timing an optimized binary, `run` checks it against the reference binary at `n = 12`
 with 10000 shots. The noiseless counts must match exactly. For the noisy counts, `run` puts each
 outcome in a group by its noiseless count (0, 1, 2, 3, or 4 and more). A two-sample chi-square
-test over these groups must give `p >= 0.001`. Noise moves shots from likely to unlikely
-outcomes, and the groups make this move visible. `run` also rejects counts that do not add up to
-the requested shots.
+test over these groups must give a p-value of at least 0.001. The p-value is the chance of a
+difference this large between two samples of the same distribution. Noise moves shots from
+likely to unlikely outcomes, and the groups make this move visible. `run` also rejects counts
+that do not add up to the requested shots.
 
 `run` writes `benchmarks/results/<LABEL>.json`. `plot` reads all results in that folder and
 writes `benchmarks/results/time_vs_n.png`. It also prints a table with peak memory, effective
