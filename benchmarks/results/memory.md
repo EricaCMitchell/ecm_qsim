@@ -30,9 +30,28 @@ Both versions follow their models within 0.6% at n = 24 and within 0.2% from n =
 the peak falls from 12.01 GiB to 8.01 GiB (-33.3%). The wall time is 101.5 s against 103.7 s
 (-2.0%). This is a regression check, not a speed-up: the change is within run-to-run noise.
 
-The qubit limit on this machine stays at 29. `StateVector::max_qubits()` now budgets 16 bytes
-per amplitude in half of physical memory (12 GiB): 8 GiB fits at n = 29, and 16 GiB at n = 30
-does not.
+### Qubit limit and one n = 30 run
+
+`StateVector::max_qubits()` budgets 16 bytes per amplitude. After the run above, abbba30 changed
+the budget from half of physical memory to physical memory less 1 GiB for overhead. On this
+24 GiB machine the budget goes from 12 GiB to 23 GiB, and the limit goes from 29 to 30 qubits:
+16 GiB fits at n = 30, and 32 GiB at n = 31 does not. The change affects only which sizes the
+constructor refuses, so the measurements above stay valid. The rule assumes a machine with
+few other processes, for example a compute node.
+
+One n = 30 run (abbba30, the same circuit generator, seeds and `measure()` as the runner) did
+not finish on this machine with desktop applications open:
+
+- The runner's prediction, scaled from the n = 29 time, was 210.1 s.
+- The process held 16 GiB, but only 9.4 GiB was resident. Other processes held several GiB,
+  4.3 GiB for one browser GPU process. macOS compressed and swapped the rest of the state:
+  swap use went from 1.75 GB to 3.45 GB.
+- After 16 min 6 s (13 min 32 s of CPU time), the run was stopped with `SIGTERM`. Thus there are
+  no counts, no peak-memory value from the runner, and no time for n = 30. The run is not in
+  `memory.json` or `time_vs_n.png`.
+
+This run measures swap, not the simulator. A fair n = 30 measurement needs about 16 GiB of
+free physical memory.
 
 ### Many shots (n = 12, 100000 shots, p_gate = p_idle = 1e-3, p_readout = 1e-2)
 
