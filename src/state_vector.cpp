@@ -33,8 +33,8 @@ constexpr double kNegligibleProbability = 1e-12;
 // amplitude, because run() samples the state in place.
 constexpr std::uint64_t kWorkingBytesPerAmplitude = 16;
 
-// Physical memory kept back for the OS, other processes and this process's
-// own overhead. The state may use the rest.
+// Physical memory kept back for this process's overhead on a dedicated
+// compute node. This is not an estimate of memory available on a workstation.
 constexpr std::uint64_t kMemoryOverheadBytes = std::uint64_t{1} << 30;
 
 void check_qubit_count(int n_qubits, const std::string& where) {
@@ -57,9 +57,9 @@ std::uint64_t physical_memory_bytes() {
          static_cast<std::uint64_t>(page_size);
 }
 
-// |0...0> on n_qubits qubits. Checks the size before allocating, so callers
-// receive std::length_error instead of std::bad_alloc or, on an OS that
-// overcommits memory, a kill signal.
+// |0...0> on n_qubits qubits. Rejects states above the theoretical capacity
+// limit before allocating. Allocation may still fail, swap heavily or be
+// killed if other processes are using a significant share of physical memory.
 Eigen::VectorXcd zero_state(int n_qubits) {
   check_qubit_count(n_qubits, "StateVector");
   const int limit = StateVector::max_qubits();

@@ -29,7 +29,11 @@ public:
   // Largest qubit count the first constructor accepts on this machine: the
   // amplitudes (16 bytes each) must fit in physical memory less 1 GiB for
   // overhead. At most kMaxQubits. to_vector() and probabilities() are copies,
-  // and run() does not call them, so the budget does not include them.
+  // and run() does not call them, so the budget does not include them. This
+  // is a theoretical capacity limit based on total physical memory, not
+  // currently available memory. It assumes a dedicated compute node with few
+  // background processes. On laptops and workstations, max_qubits() may permit
+  // a state that causes heavy swapping or cannot complete.
   static int max_qubits();
 
   int n_qubits() const noexcept { return n_qubits_; }
