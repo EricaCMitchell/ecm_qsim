@@ -29,9 +29,9 @@ static_assert(sizeof(std::complex<double>) == 16);
 // Probabilities below this are rounding noise; to_string() omits them.
 constexpr double kNegligibleProbability = 1e-12;
 
-// Bytes per amplitude that a simulation holds while it samples: the
-// amplitude (16) plus its entry in one probabilities() copy (8).
-constexpr std::uint64_t kWorkingBytesPerAmplitude = 24;
+// Bytes per amplitude that a simulation holds while it samples: only the
+// amplitude, because run() samples the state in place.
+constexpr std::uint64_t kWorkingBytesPerAmplitude = 16;
 
 void check_qubit_count(int n_qubits, const std::string& where) {
   if (n_qubits < 1 || n_qubits > kMaxQubits) {
