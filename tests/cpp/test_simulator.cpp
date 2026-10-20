@@ -121,7 +121,7 @@ TEST_CASE("simulate applies the Pauli matrix of each error, in step order") {
 
 TEST_CASE("simulate matches the general kernels on a noisy brickwork circuit") {
   // Three brickwork layers on 5 qubits (RY on every qubit, then CNOTs on
-  // alternating neighbouring pairs), plus a reversed CNOT and an H that take
+  // alternating neighboring pairs), plus a reversed CNOT and an H that take
   // the general paths, and X, Y and Z errors.
   constexpr int kQubits = 5;
   Circuit circuit{kQubits, {}};

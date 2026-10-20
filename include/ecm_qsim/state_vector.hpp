@@ -55,7 +55,7 @@ public:
   void apply_2q(const Eigen::Matrix4cd& m, int j, int k);
 
   // apply_1q(matrix_1q(RY, theta), k) without the general matrix product:
-  // RY is real, so each pair needs 6 real FLOPs for each amplitude.
+  // RY is real, so each amplitude needs 6 real FLOPs (12 for each pair).
   // Throws std::out_of_range unless 0 <= k < n_qubits().
   void apply_ry(double theta, int k);
 
