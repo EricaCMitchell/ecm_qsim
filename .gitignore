@@ -20,3 +20,9 @@ experiments/*.png
 
 # Benchmark circuits
 benchmarks/circuits/
+
+# Raw benchmark profiles are large and platform-specific. Curated JSON, PNG,
+# and Markdown evidence in this directory is committed.
+benchmarks/results/*.trace/
+benchmarks/results/*.perf.data
+benchmarks/results/hot_functions.py
