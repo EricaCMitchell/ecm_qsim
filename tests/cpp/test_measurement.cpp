@@ -3,12 +3,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
+#include <complex>
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
 #include <map>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "ecm_qsim/circuit.hpp"
 #include "ecm_qsim/gates.hpp"
@@ -26,6 +29,30 @@ Eigen::VectorXd probs(std::initializer_list<double> entries) {
     p(i++) = x;
   }
   return p;
+}
+
+// A normalized state on n_qubits qubits with deterministic random amplitudes.
+StateVector random_state(int n_qubits, std::uint64_t seed) {
+  std::mt19937_64 rng(seed);
+  std::normal_distribution<double> normal;
+  Eigen::VectorXcd amplitudes(Eigen::Index{1} << n_qubits);
+  for (Eigen::Index i = 0; i < amplitudes.size(); ++i) {
+    amplitudes(i) = {normal(rng), normal(rng)};
+  }
+  amplitudes.normalize();
+  return StateVector(amplitudes);
+}
+
+// The what() of the std::invalid_argument that call throws.
+template <typename Call>
+std::string invalid_argument_message(Call call) {
+  try {
+    call();
+  } catch (const std::invalid_argument& e) {
+    return e.what();
+  }
+  FAIL("no std::invalid_argument was thrown");
+  return {};
 }
 
 }  // namespace
@@ -111,6 +138,63 @@ TEST_CASE("sample_index rejects negative, NaN and infinite entries") {
 TEST_CASE("sample_index rejects a distribution with no weight") {
   REQUIRE_THROWS_AS(sample_index(probs({0, 0}), 0.5), std::domain_error);
   REQUIRE_THROWS_AS(sample_index(Eigen::VectorXd(), 0.5), std::domain_error);
+}
+
+TEST_CASE("sample_index on a state agrees with its probabilities") {
+  const int n_qubits = GENERATE(1, 6);
+  const std::uint64_t seed = GENERATE(1, 2, 3, 4);
+  CAPTURE(n_qubits, seed);
+  const StateVector state = random_state(n_qubits, seed);
+  const Eigen::VectorXd p = state.probabilities();
+
+  // Values of u just below, at and just above each cumulative boundary,
+  // summed in the order sample_index adds them, plus an even grid.
+  const double total = p.sum();
+  std::vector<double> us;
+  double cumulative = 0.0;
+  for (Eigen::Index i = 0; i < p.size(); ++i) {
+    cumulative += p(i);
+    const double b = cumulative / total;
+    for (const double u : {std::nextafter(b, 0.0), b, std::nextafter(b, 1.0)}) {
+      if (u >= 0.0 && u < 1.0) {
+        us.push_back(u);
+      }
+    }
+  }
+  constexpr int kGrid = 1024;
+  for (int t = 0; t < kGrid; ++t) {
+    us.push_back(static_cast<double>(t) / kGrid);
+  }
+
+  for (const double u : us) {
+    CAPTURE(u);
+    REQUIRE(sample_index(state, u) == sample_index(p, u));
+  }
+}
+
+TEST_CASE("sample_index on a state handles exceptional amplitudes") {
+  SECTION("a subnormal probability reaches the last non-zero fallback") {
+    Eigen::VectorXcd amplitudes = Eigen::VectorXcd::Zero(4);
+    amplitudes(1) = 1e-160;  // |amplitude|^2 = 1e-320 is subnormal
+    REQUIRE(sample_index(StateVector(amplitudes), std::nextafter(1.0, 0.0)) ==
+            1);
+  }
+  SECTION("NaN and infinite amplitudes throw the vector overload's error") {
+    const double bad = GENERATE(std::numeric_limits<double>::quiet_NaN(),
+                                std::numeric_limits<double>::infinity());
+    CAPTURE(bad);
+    Eigen::VectorXcd amplitudes(2);
+    amplitudes << 0.5, bad;
+    const StateVector state(amplitudes);
+    const std::string expected = invalid_argument_message(
+        [&] { sample_index(state.probabilities(), 0.5); });
+    REQUIRE(invalid_argument_message([&] { sample_index(state, 0.5); }) ==
+            expected);
+    REQUIRE(expected ==
+            (std::isnan(bad)
+                 ? "sample_index: probability 1 is nan"
+                 : "sample_index: total probability is not finite"));
+  }
 }
 
 TEST_CASE("uniform_from_bits maps 64 bits into [0, 1)") {

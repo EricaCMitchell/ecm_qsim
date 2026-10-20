@@ -7,7 +7,13 @@
 
 namespace ecm_qsim {
 
-std::uint64_t sample_index(const Eigen::VectorXd& probabilities, double u) {
+namespace {
+
+// The algorithm behind both overloads. probabilities is any dense Eigen
+// expression of double; each entry is read once in each pass.
+template <typename Derived>
+std::uint64_t sample_index_impl(const Eigen::DenseBase<Derived>& probabilities,
+                                double u) {
   if (!(u >= 0.0 && u < 1.0)) {  // also rejects NaN
     throw std::invalid_argument("sample_index: u must be in [0, 1), got " +
                                 std::to_string(u));
@@ -46,6 +52,16 @@ std::uint64_t sample_index(const Eigen::VectorXd& probabilities, double u) {
   // The running sum ends at exactly total, which is greater than u * total
   // unless total is subnormal and u * total rounds up to it.
   return static_cast<std::uint64_t>(last_nonzero);
+}
+
+}  // namespace
+
+std::uint64_t sample_index(const Eigen::VectorXd& probabilities, double u) {
+  return sample_index_impl(probabilities, u);
+}
+
+std::uint64_t sample_index(const StateVector& state, double u) {
+  return sample_index_impl(state.amplitudes_.cwiseAbs2(), u);
 }
 
 }  // namespace ecm_qsim

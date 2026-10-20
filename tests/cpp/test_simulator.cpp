@@ -339,6 +339,8 @@ TEST_CASE("run reference engine follows the documented draw order") {
   Counts expected;
   for (int shot = 0; shot < kShots; ++shot) {
     const auto errors = sample_pauli_errors(circuit, noise, rng);
+    // Samples a probabilities() copy on purpose: run() samples the state in
+    // place, so this also checks both paths pick the same index each shot.
     const std::uint64_t index = sample_index(
         simulate(circuit, errors).probabilities(), uniform_from_bits(rng()));
     ++expected[to_bitstring(

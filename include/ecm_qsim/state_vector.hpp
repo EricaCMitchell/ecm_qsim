@@ -83,6 +83,10 @@ public:
   std::string to_string() const;
 
 private:
+  // Reads amplitudes_ in place, so sampling needs no probabilities() copy
+  // and StateVector exposes no view of its storage.
+  friend std::uint64_t sample_index(const StateVector& state, double u);
+
   int n_qubits_;  // declared before amplitudes_: the constructors rely on it
   Eigen::VectorXcd amplitudes_;
 };
