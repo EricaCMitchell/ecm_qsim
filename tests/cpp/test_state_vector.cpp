@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
@@ -123,7 +124,7 @@ TEST_CASE("StateVector rejects qubit counts outside 1..kMaxQubits") {
 }
 
 TEST_CASE("StateVector refuses sizes beyond its memory limit") {
-  // 40 qubits need 2^40 * 24 bytes (24 TiB). For 63 qubits the byte count
+  // 40 qubits need 2^40 * 16 bytes (16 TiB). For 63 qubits the byte count
   // does not fit in 64 bits.
   const int n = GENERATE(40, 63);
   CAPTURE(n);
@@ -133,20 +134,26 @@ TEST_CASE("StateVector refuses sizes beyond its memory limit") {
                                         std::to_string(n) + " amplitudes"));
 }
 
-TEST_CASE("max_qubits fits 24 bytes per amplitude in half of memory") {
+TEST_CASE("max_qubits fits 16 bytes per amplitude in memory less 1 GiB") {
   // 2^limit amplitudes fit in the budget and 2^(limit + 1) do not. The
-  // state at the limit is not built: it can take half of physical memory.
+  // state at the limit is not built: it can take almost all of physical
+  // memory.
   const int limit = StateVector::max_qubits();
   CAPTURE(limit);
-  REQUIRE(limit >= 20);  // 2^20 * 24 bytes is 24 MiB
+  REQUIRE(limit >= 20);  // 2^20 * 16 bytes is 16 MiB
   REQUIRE(limit < kMaxQubits);
-  const std::uint64_t half_memory =
+  const std::uint64_t budget =
       static_cast<std::uint64_t>(sysconf(_SC_PHYS_PAGES)) *
-      static_cast<std::uint64_t>(sysconf(_SC_PAGESIZE)) / 2;
-  REQUIRE((std::uint64_t{24} << limit) <= half_memory);
-  REQUIRE((std::uint64_t{24} << (limit + 1)) > half_memory);
+          static_cast<std::uint64_t>(sysconf(_SC_PAGESIZE)) -
+      (std::uint64_t{1} << 30);
+  REQUIRE((std::uint64_t{16} << limit) <= budget);
+  REQUIRE((std::uint64_t{16} << (limit + 1)) > budget);
   // The constructor refuses limit + 1 before it allocates.
-  REQUIRE_THROWS_AS(StateVector(limit + 1), std::length_error);
+  REQUIRE_THROWS_MATCHES(
+      StateVector(limit + 1), std::length_error,
+      Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+          "at 16 bytes each, at most " + std::to_string(limit) +
+          " qubits fit in physical memory less 1 GiB")));
 }
 
 TEST_CASE("StateVector takes amplitudes as given") {
@@ -386,10 +393,10 @@ TEST_CASE("apply_2q then the adjoint restores the state") {
 
 TEST_CASE("Every gate keeps the total probability within 1e-12 of 1") {
   // 500 random gates of every type on random qubits, with controls both
-  // above and below their targets. probabilities() is what sample_index
-  // receives, so its sum is checked after each gate: a kernel that loses
-  // norm fails at the gate that caused it, and rounding drift fails as soon
-  // as it passes 1e-12.
+  // above and below their targets. probabilities() holds the values that
+  // sample_index reads, so its sum is checked after each gate: a kernel that
+  // loses norm fails at the gate that caused it, and rounding drift fails as
+  // soon as it passes 1e-12.
   constexpr int kQubits = 6;
   constexpr int kGates = 500;
   constexpr std::array kOneQubit = {GateType::X,  GateType::Y,  GateType::Z,

@@ -1,0 +1,281 @@
+{
+  "label": "memory",
+  "sim": "/Users/emitchell/Work/ecm_qsim/build/sim",
+  "commit": "c6678cd27214fd3116edbf4228351b092a899614",
+  "date": "2026-10-20T20:58:11+00:00",
+  "machine": {
+    "cpu_model": "Apple M3",
+    "physical_cores": 8,
+    "memory_bytes": 25769803776,
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "gpu": "not used"
+  },
+  "compiler": "Apple clang 21.0.0 (clang-2100.3.34.2)",
+  "compiler_flags": "-O3 -DNDEBUG",
+  "peak_bandwidth_gbps": 100.0,
+  "depth": 20,
+  "angle_seed": 42,
+  "sim_seed": 42,
+  "correctness": {
+    "n": 12,
+    "shots": 10000,
+    "noiseless": "exact match",
+    "noisy_p_value": 1.0
+  },
+  "many_qubits": {
+    "points": [
+      {
+        "n": 4,
+        "wall_s": 0.003962499991757795,
+        "peak_memory_bytes": 983328,
+        "modeled_bytes": 56320,
+        "algorithmic_flops": 7680,
+        "effective_bandwidth_gbps": 0.01421324924092076,
+        "fraction_of_peak": 0.0001421324924092076
+      },
+      {
+        "n": 5,
+        "wall_s": 0.0028072080167476088,
+        "peak_memory_bytes": 1032480,
+        "modeled_bytes": 143360,
+        "algorithmic_flops": 19200,
+        "effective_bandwidth_gbps": 0.051068534695228915,
+        "fraction_of_peak": 0.0005106853469522891
+      },
+      {
+        "n": 6,
+        "wall_s": 0.0027134169940836728,
+        "peak_memory_bytes": 1081632,
+        "modeled_bytes": 348160,
+        "algorithmic_flops": 46080,
+        "effective_bandwidth_gbps": 0.12831054008990403,
+        "fraction_of_peak": 0.0012831054008990402
+      },
+      {
+        "n": 7,
+        "wall_s": 0.0026720829773694277,
+        "peak_memory_bytes": 1065248,
+        "modeled_bytes": 819200,
+        "algorithmic_flops": 107520,
+        "effective_bandwidth_gbps": 0.30657730577157216,
+        "fraction_of_peak": 0.0030657730577157215
+      },
+      {
+        "n": 8,
+        "wall_s": 0.002639500016812235,
+        "peak_memory_bytes": 1048864,
+        "modeled_bytes": 1884160,
+        "algorithmic_flops": 245760,
+        "effective_bandwidth_gbps": 0.7138321606360621,
+        "fraction_of_peak": 0.007138321606360621
+      },
+      {
+        "n": 9,
+        "wall_s": 0.0026037500065285712,
+        "peak_memory_bytes": 1081632,
+        "modeled_bytes": 4259840,
+        "algorithmic_flops": 552960,
+        "effective_bandwidth_gbps": 1.6360403223500697,
+        "fraction_of_peak": 0.016360403223500696
+      },
+      {
+        "n": 10,
+        "wall_s": 0.0026647909835446626,
+        "peak_memory_bytes": 1081632,
+        "modeled_bytes": 9502720,
+        "algorithmic_flops": 1228800,
+        "effective_bandwidth_gbps": 3.5660282771445106,
+        "fraction_of_peak": 0.035660282771445104
+      },
+      {
+        "n": 11,
+        "wall_s": 0.00316416600253433,
+        "peak_memory_bytes": 1114400,
+        "modeled_bytes": 20971520,
+        "algorithmic_flops": 2703360,
+        "effective_bandwidth_gbps": 6.6278191419802,
+        "fraction_of_peak": 0.066278191419802
+      },
+      {
+        "n": 12,
+        "wall_s": 0.002910833019996062,
+        "peak_memory_bytes": 1196344,
+        "modeled_bytes": 45875200,
+        "algorithmic_flops": 5898240,
+        "effective_bandwidth_gbps": 15.760162017147264,
+        "fraction_of_peak": 0.15760162017147264
+      },
+      {
+        "n": 13,
+        "wall_s": 0.003235250012949109,
+        "peak_memory_bytes": 1278264,
+        "modeled_bytes": 99614720,
+        "algorithmic_flops": 12779520,
+        "effective_bandwidth_gbps": 30.79042410981885,
+        "fraction_of_peak": 0.3079042410981885
+      },
+      {
+        "n": 14,
+        "wall_s": 0.004130541026825085,
+        "peak_memory_bytes": 1392952,
+        "modeled_bytes": 214958080,
+        "algorithmic_flops": 27525120,
+        "effective_bandwidth_gbps": 52.04114390923414,
+        "fraction_of_peak": 0.5204114390923413
+      },
+      {
+        "n": 15,
+        "wall_s": 0.0056975840125232935,
+        "peak_memory_bytes": 1655096,
+        "modeled_bytes": 461373440,
+        "algorithmic_flops": 58982400,
+        "effective_bandwidth_gbps": 80.97703149017214,
+        "fraction_of_peak": 0.8097703149017214
+      },
+      {
+        "n": 16,
+        "wall_s": 0.008934250014135614,
+        "peak_memory_bytes": 2179384,
+        "modeled_bytes": 985661440,
+        "algorithmic_flops": 125829120,
+        "effective_bandwidth_gbps": 110.32391509533578,
+        "fraction_of_peak": 1.1032391509533577
+      },
+      {
+        "n": 17,
+        "wall_s": 0.015968624997185543,
+        "peak_memory_bytes": 3277112,
+        "modeled_bytes": 2097152000,
+        "algorithmic_flops": 267386880,
+        "effective_bandwidth_gbps": 131.32952902141676,
+        "fraction_of_peak": 1.3132952902141677
+      },
+      {
+        "n": 18,
+        "wall_s": 0.030688790982821956,
+        "peak_memory_bytes": 5407032,
+        "modeled_bytes": 4445962240,
+        "algorithmic_flops": 566231040,
+        "effective_bandwidth_gbps": 144.87251200246456,
+        "fraction_of_peak": 1.4487251200246456
+      },
+      {
+        "n": 19,
+        "wall_s": 0.06197258300380781,
+        "peak_memory_bytes": 9601336,
+        "modeled_bytes": 9395240960,
+        "algorithmic_flops": 1195376640,
+        "effective_bandwidth_gbps": 151.60318490230952,
+        "fraction_of_peak": 1.5160318490230953
+      },
+      {
+        "n": 20,
+        "wall_s": 0.12916199999745004,
+        "peak_memory_bytes": 17989944,
+        "modeled_bytes": 19797114880,
+        "algorithmic_flops": 2516582400,
+        "effective_bandwidth_gbps": 153.2735237948533,
+        "fraction_of_peak": 1.532735237948533
+      },
+      {
+        "n": 21,
+        "wall_s": 0.27655287500238046,
+        "peak_memory_bytes": 34783544,
+        "modeled_bytes": 41607495680,
+        "algorithmic_flops": 5284823040,
+        "effective_bandwidth_gbps": 150.450418133031,
+        "fraction_of_peak": 1.5045041813303102
+      },
+      {
+        "n": 22,
+        "wall_s": 0.5984007919905707,
+        "peak_memory_bytes": 68321616,
+        "modeled_bytes": 87241523200,
+        "algorithmic_flops": 11072962560,
+        "effective_bandwidth_gbps": 145.79112255148002,
+        "fraction_of_peak": 1.4579112255148001
+      },
+      {
+        "n": 23,
+        "wall_s": 1.2519777080160566,
+        "peak_memory_bytes": 135496064,
+        "modeled_bytes": 182536110080,
+        "algorithmic_flops": 23152558080,
+        "effective_bandwidth_gbps": 145.79821103145312,
+        "fraction_of_peak": 1.4579821103145312
+      },
+      {
+        "n": 24,
+        "wall_s": 2.603367875010008,
+        "peak_memory_bytes": 269795808,
+        "modeled_bytes": 381178347520,
+        "algorithmic_flops": 48318382080,
+        "effective_bandwidth_gbps": 146.4173969337832,
+        "fraction_of_peak": 1.4641739693378322
+      },
+      {
+        "n": 25,
+        "wall_s": 5.426005832996452,
+        "peak_memory_bytes": 538346144,
+        "modeled_bytes": 794568949760,
+        "algorithmic_flops": 100663296000,
+        "effective_bandwidth_gbps": 146.43717205906654,
+        "fraction_of_peak": 1.4643717205906654
+      },
+      {
+        "n": 26,
+        "wall_s": 11.274245167005574,
+        "peak_memory_bytes": 1075495968,
+        "modeled_bytes": 1653562408960,
+        "algorithmic_flops": 209379655680,
+        "effective_bandwidth_gbps": 146.66723886750322,
+        "fraction_of_peak": 1.4666723886750321
+      },
+      {
+        "n": 27,
+        "wall_s": 23.42111374999513,
+        "peak_memory_bytes": 2149746464,
+        "modeled_bytes": 3435973836800,
+        "algorithmic_flops": 434865438720,
+        "effective_bandwidth_gbps": 146.70411806529543,
+        "fraction_of_peak": 1.4670411806529544
+      },
+      {
+        "n": 28,
+        "wall_s": 48.46439000000828,
+        "peak_memory_bytes": 4298247456,
+        "modeled_bytes": 7129645711360,
+        "algorithmic_flops": 901943132160,
+        "effective_bandwidth_gbps": 147.11101720993048,
+        "fraction_of_peak": 1.4711101720993047
+      },
+      {
+        "n": 29,
+        "wall_s": 101.5302161249856,
+        "peak_memory_bytes": 8595347744,
+        "modeled_bytes": 14774687498240,
+        "algorithmic_flops": 1868310773760,
+        "effective_bandwidth_gbps": 145.52010290268743,
+        "fraction_of_peak": 1.4552010290268742
+      }
+    ],
+    "prediction": {
+      "n": 29,
+      "from_n": 28,
+      "predicted_s": 100.43222987953523,
+      "measured_s": 101.5302161249856
+    }
+  },
+  "many_shots": {
+    "n": 12,
+    "shots": 100000,
+    "noise": {
+      "p_gate": 0.001,
+      "p_idle": 0.001,
+      "p_readout": 0.01
+    },
+    "wall_s": 26.652393874974223,
+    "peak_memory_bytes": 1753400,
+    "shots_per_s": 3752.0081861726094
+  }
+}
