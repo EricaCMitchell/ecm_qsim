@@ -123,7 +123,7 @@ Measure the reference, then plot:
 P=.venv/bin/python
 $P benchmarks/run_benchmarks.py run reference --sim build/reference/build/sim \
     --commit "$(git rev-parse 'v1-ref^{commit}')" --max-n 29 --peak-bandwidth-gbps 100 \
-    --compiler "Apple clang 21.0.0" --compiler-flags "-O3 -DNDEBUG"
+    --compiler "Apple clang 21.0.0 (clang-2100.3.34.2)" --compiler-flags "-O3 -DNDEBUG"
 $P benchmarks/run_benchmarks.py plot
 ```
 
@@ -137,7 +137,7 @@ To measure an optimized version, give it its own label and binary:
 ```sh
 $P benchmarks/run_benchmarks.py run simd --sim build/release/sim \
     --commit "$(git rev-parse HEAD)" --max-n 29 --peak-bandwidth-gbps 100 \
-    --compiler "Apple clang 21.0.0" --compiler-flags "-O3 -DNDEBUG"
+    --compiler "Apple clang 21.0.0 (clang-2100.3.34.2)" --compiler-flags "-O3 -DNDEBUG"
 $P benchmarks/run_benchmarks.py plot
 ```
 
