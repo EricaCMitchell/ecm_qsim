@@ -33,6 +33,10 @@ constexpr double kNegligibleProbability = 1e-12;
 // amplitude, because run() samples the state in place.
 constexpr std::uint64_t kWorkingBytesPerAmplitude = 16;
 
+// Physical memory kept back for the OS, other processes and this process's
+// own overhead. The state may use the rest.
+constexpr std::uint64_t kMemoryOverheadBytes = std::uint64_t{1} << 30;
+
 void check_qubit_count(int n_qubits, const std::string& where) {
   if (n_qubits < 1 || n_qubits > kMaxQubits) {
     throw std::invalid_argument(where + ": qubit count must be 1.." +
@@ -64,7 +68,8 @@ Eigen::VectorXcd zero_state(int n_qubits) {
         "StateVector: " + std::to_string(n_qubits) + " qubits need 2^" +
         std::to_string(n_qubits) + " amplitudes; at " +
         std::to_string(kWorkingBytesPerAmplitude) + " bytes each, at most " +
-        std::to_string(limit) + " qubits fit in half of physical memory");
+        std::to_string(limit) +
+        " qubits fit in physical memory less 1 GiB for overhead");
   }
   // Backstop only: macOS overcommits, so an oversized allocation usually
   // succeeds and the OS kills the process later instead of throwing.
@@ -109,8 +114,10 @@ StateVector::StateVector(Eigen::VectorXcd amplitudes)
 int StateVector::max_qubits() {
   // Divide the budget instead of multiplying 2^n by kWorkingBytesPerAmplitude,
   // so that n up to 63 cannot overflow. bit_width(x) - 1 is floor(log2(x)).
-  const std::uint64_t max_amplitudes =
-      physical_memory_bytes() / 2 / kWorkingBytesPerAmplitude;
+  const std::uint64_t memory = physical_memory_bytes();
+  const std::uint64_t budget =
+      memory > kMemoryOverheadBytes ? memory - kMemoryOverheadBytes : 0;
+  const std::uint64_t max_amplitudes = budget / kWorkingBytesPerAmplitude;
   const int n = static_cast<int>(std::bit_width(max_amplitudes)) - 1;
   return std::min(n, kMaxQubits);
 }

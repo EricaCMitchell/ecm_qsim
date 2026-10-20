@@ -27,9 +27,9 @@ public:
   explicit StateVector(Eigen::VectorXcd amplitudes);
 
   // Largest qubit count the first constructor accepts on this machine: the
-  // amplitudes (16 bytes each) must fit in half of physical memory. At most
-  // kMaxQubits. to_vector() and probabilities() are copies, and run() does
-  // not call them, so the budget does not include them.
+  // amplitudes (16 bytes each) must fit in physical memory less 1 GiB for
+  // overhead. At most kMaxQubits. to_vector() and probabilities() are copies,
+  // and run() does not call them, so the budget does not include them.
   static int max_qubits();
 
   int n_qubits() const noexcept { return n_qubits_; }
