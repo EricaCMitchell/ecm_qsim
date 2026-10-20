@@ -18,6 +18,7 @@ add_library(ecm_qsim_core
   src/state_vector.cpp
   src/measurement.cpp
   src/noise.cpp
+  src/fusion.cpp
   src/simulator.cpp
 )
 target_include_directories(ecm_qsim_core PUBLIC include)

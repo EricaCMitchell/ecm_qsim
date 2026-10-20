@@ -17,13 +17,15 @@ namespace ecm_qsim {
 // The state after one trajectory: starts from |0...0>, and for each time
 // step t applies the gates of step t, then the errors with timestep t in
 // list order. errors must be sorted by timestep, as sample_pauli_errors
-// returns them.
+// returns them. The gates are applied as fuse_trajectory fuses them.
 // Throws std::out_of_range if an error's timestep is not a step of the
 // circuit, std::invalid_argument if errors are not sorted by timestep or
 // an error's pauli is not X, Y or Z. These checks run before allocation.
 // StateVector errors propagate: std::invalid_argument for a bad
-// n_qubits, std::length_error above StateVector::max_qubits(),
-// std::out_of_range for a qubit outside the register.
+// n_qubits, std::length_error above StateVector::max_qubits(). Then
+// fuse_trajectory throws for the first bad qubit in execution order:
+// std::out_of_range for a qubit outside the register, std::invalid_argument
+// for a two-qubit gate on one qubit.
 StateVector simulate(const Circuit& circuit,
                      const std::vector<PauliError>& errors);
 

@@ -9,6 +9,7 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(unit_tests
   test_circuit.cpp
   test_cli.cpp
+  test_fusion.cpp
   test_gates.cpp
   test_measurement.cpp
   test_noise.cpp
