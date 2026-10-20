@@ -390,10 +390,10 @@ TEST_CASE("apply_2q then the adjoint restores the state") {
 
 TEST_CASE("Every gate keeps the total probability within 1e-12 of 1") {
   // 500 random gates of every type on random qubits, with controls both
-  // above and below their targets. probabilities() is what sample_index
-  // receives, so its sum is checked after each gate: a kernel that loses
-  // norm fails at the gate that caused it, and rounding drift fails as soon
-  // as it passes 1e-12.
+  // above and below their targets. probabilities() holds the values that
+  // sample_index reads, so its sum is checked after each gate: a kernel that
+  // loses norm fails at the gate that caused it, and rounding drift fails as
+  // soon as it passes 1e-12.
   constexpr int kQubits = 6;
   constexpr int kGates = 500;
   constexpr std::array kOneQubit = {GateType::X,  GateType::Y,  GateType::Z,

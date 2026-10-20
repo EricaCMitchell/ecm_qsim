@@ -107,8 +107,8 @@ StateVector::StateVector(Eigen::VectorXcd amplitudes)
       amplitudes_(std::move(amplitudes)) {}
 
 int StateVector::max_qubits() {
-  // Divide the budget instead of multiplying 2^n by 24, so that n up to 63
-  // cannot overflow. bit_width(x) - 1 is floor(log2(x)).
+  // Divide the budget instead of multiplying 2^n by kWorkingBytesPerAmplitude,
+  // so that n up to 63 cannot overflow. bit_width(x) - 1 is floor(log2(x)).
   const std::uint64_t max_amplitudes =
       physical_memory_bytes() / 2 / kWorkingBytesPerAmplitude;
   const int n = static_cast<int>(std::bit_width(max_amplitudes)) - 1;
