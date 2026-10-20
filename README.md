@@ -146,8 +146,10 @@ writes `benchmarks/results/time_vs_n.png`. It also prints a table with peak memo
 bandwidth, shots per second, and the speed-up against the reference. The folder is not
 committed.
 
-Peak memory is the maximum resident set size of `sim`. If the OS compresses or swaps pages, this
-value is less than the memory that `sim` allocated (macOS compression did this at `n = 29`).
+On macOS, peak memory is the peak physical footprint of `sim`. This value includes pages that
+macOS compresses. The maximum resident set size does not include them, so it is too low near the
+memory limit. On Linux, peak memory is the maximum resident set size. If Linux swaps pages out,
+this value is less than the memory that `sim` allocated.
 
 #### Profiling
 

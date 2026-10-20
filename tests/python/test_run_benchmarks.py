@@ -1,6 +1,8 @@
 import importlib.util
 import json
+import os
 import signal
+import subprocess
 import sys
 from pathlib import Path
 
@@ -26,6 +28,32 @@ def test_run_child_reports_exit_code_stdout_and_peak_rss_in_bytes():
     assert err == ""
     assert wall_s > 0
     assert 64 * MiB <= rss < 1024 * MiB
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS footprint")
+def test_run_child_reports_macos_peak_footprint_not_max_rss(monkeypatch):
+    # ru_maxrss misses pages that macOS has compressed; the footprint counts them.
+    reads = []
+
+    def peak_footprint(pid):
+        reads.append(pid)
+        return 12 << 30
+
+    monkeypatch.setattr(rb, "_peak_footprint", peak_footprint)
+    code, *_, peak = rb.run_child([sys.executable, "-c", "pass"])
+    assert code == 0
+    assert peak == 12 << 30
+    assert len(reads) == 1
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS footprint")
+def test_peak_footprint_reads_a_child_that_has_exited():
+    proc = subprocess.Popen([sys.executable, "-c", "data = b'x' * (64 << 20)"])
+    os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT)
+    peak = rb._peak_footprint(proc.pid)
+    os.wait4(proc.pid, 0)
+    proc.returncode = 0
+    assert 64 * MiB <= peak < 1024 * MiB
 
 
 def test_run_child_does_not_hang_on_large_stderr():
@@ -61,7 +89,7 @@ def test_measure_builds_noiseless_command_and_returns_measurement(monkeypatch):
         "/x/sim", "/c/n4.txt", "--shots", "1", "--seed", "42",
         "--p-gate", "0.0", "--p-idle", "0.0", "--p-readout", "0.0", "--json",
     ]]  # fmt: skip
-    assert result == {"counts": {"0000": 1}, "wall_s": 0.5, "peak_rss_bytes": 1234}
+    assert result == {"counts": {"0000": 1}, "wall_s": 0.5, "peak_memory_bytes": 1234}
 
 
 def test_measure_builds_many_shots_command(monkeypatch):
@@ -174,7 +202,7 @@ def fake_measure(calls, capsys, max_n, fail_at=None):
         })  # fmt: skip
         if n == fail_at:
             raise RuntimeError(f"sim failed at n={n}")
-        return {"counts": {"0" * n: shots}, "wall_s": 1e-6 * 2**n, "peak_rss_bytes": 16 << n}
+        return {"counts": {"0" * n: shots}, "wall_s": 1e-6 * 2**n, "peak_memory_bytes": 16 << n}
 
     return measure
 
@@ -251,7 +279,7 @@ def synthetic_result(label, walls, shots_per_s):
         "many_qubits": {
             "points": [
                 {
-                    "n": n, "wall_s": s, "peak_rss_bytes": 16 << n,
+                    "n": n, "wall_s": s, "peak_memory_bytes": 16 << n,
                     "modeled_bytes": rb.estimated_work(n)[0],
                     "useful_flops": rb.estimated_work(n)[1],
                     "effective_bandwidth_gbps": rb.estimated_work(n)[0] / s / 1e9,
@@ -266,7 +294,7 @@ def synthetic_result(label, walls, shots_per_s):
         },
         "many_shots": {
             "n": 12, "shots": 100_000, "noise": rb.MANY_SHOTS_NOISE,
-            "wall_s": 100_000 / shots_per_s, "peak_rss_bytes": 1 << 20,
+            "wall_s": 100_000 / shots_per_s, "peak_memory_bytes": 1 << 20,
             "shots_per_s": shots_per_s,
         },
     }  # fmt: skip
@@ -313,7 +341,7 @@ def test_summary_reports_speed_ups_against_the_reference():
     assert reference["label"] == "reference"
     assert (reference["largest_n"], reference["many_qubits_speed_up"]) == (6, 1.0)
     assert optimized["largest_n"] == 7
-    assert optimized["peak_rss_bytes"] == 16 << 7
+    assert optimized["peak_memory_bytes"] == 16 << 7
     assert optimized["effective_bandwidth_gbps"] == pytest.approx(
         rb.estimated_work(7)[0] / 2.0 / 1e9
     )

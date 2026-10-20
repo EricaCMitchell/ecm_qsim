@@ -6,6 +6,7 @@ and draws wall time against qubit count.
 """
 
 import argparse
+import ctypes
 import json
 import os
 import platform
@@ -45,26 +46,56 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 MEMINFO = Path("/proc/meminfo")
 
 
+class _RUsageInfoV4(ctypes.Structure):
+    # struct rusage_info_v4 in <sys/resource.h>: a UUID, then 36 uint64 fields.
+    _fields_ = [("uuid", ctypes.c_uint8 * 16), ("fields", ctypes.c_uint64 * 36)]
+
+
+_RUSAGE_INFO_V4 = 4
+_LIFETIME_MAX_PHYS_FOOTPRINT = 28  # index of ri_lifetime_max_phys_footprint
+
+
+def _peak_footprint(pid: int) -> int:
+    """Peak physical footprint in bytes of a macOS process, compressed pages included.
+
+    The process can be a zombie that has exited but is not yet reaped.
+    """
+    libproc = ctypes.CDLL("libproc.dylib", use_errno=True)
+    info = _RUsageInfoV4()
+    if libproc.proc_pid_rusage(pid, _RUSAGE_INFO_V4, ctypes.byref(info)) != 0:
+        errno = ctypes.get_errno()
+        raise OSError(errno, f"proc_pid_rusage({pid}): {os.strerror(errno)}")
+    return info.fields[_LIFETIME_MAX_PHYS_FOOTPRINT]
+
+
 def run_child(cmd: list[str]) -> tuple[int, str, str, float, int]:
-    """Runs cmd and returns exit code, stdout, stderr, wall seconds, peak RSS bytes.
+    """Runs cmd and returns exit code, stdout, stderr, wall seconds, peak memory bytes.
 
     The exit code is negative when a signal killed the child. Output goes to
-    temporary files so that a full pipe cannot block the child.
+    temporary files so that a full pipe cannot block the child. Peak memory is
+    the peak physical footprint on macOS, which counts compressed pages, and
+    the maximum resident set size on Linux.
     """
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         start = time.perf_counter()
         proc = subprocess.Popen(cmd, stdout=out, stderr=err)
-        # wait4 reaps the child itself; Popen.wait() would discard its usage.
-        _, status, usage = os.wait4(proc.pid, 0)
-        wall_s = time.perf_counter() - start
+        # Popen.wait() would reap the child and discard its usage, so wait here.
+        if platform.system() == "Darwin":
+            # Leave the child unreaped so that its footprint can still be read.
+            os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT)
+            wall_s = time.perf_counter() - start
+            peak_bytes = _peak_footprint(proc.pid)
+            _, status, _ = os.wait4(proc.pid, 0)
+        else:
+            _, status, usage = os.wait4(proc.pid, 0)
+            wall_s = time.perf_counter() - start
+            peak_bytes = usage.ru_maxrss * 1024  # kilobytes on Linux
         proc.returncode = os.waitstatus_to_exitcode(status)
         out.seek(0)
         err.seek(0)
         stdout = out.read().decode()
         stderr = err.read().decode()
-    # ru_maxrss is in bytes on macOS and in kilobytes on Linux.
-    rss_unit = 1 if platform.system() == "Darwin" else 1024
-    return proc.returncode, stdout, stderr, wall_s, usage.ru_maxrss * rss_unit
+    return proc.returncode, stdout, stderr, wall_s, peak_bytes
 
 
 def estimated_work(n: int, depth: int = DEPTH) -> tuple[int, int]:
@@ -125,7 +156,7 @@ def machine_info() -> dict[str, object]:
 def measure(
     sim: Path, circuit: Path, *, n: int, shots: int, seed: int, noise: dict[str, float]
 ) -> dict[str, object]:
-    """Runs sim once on circuit and returns its counts, wall time and peak RSS."""
+    """Runs sim once on circuit and returns its counts, wall time and peak memory."""
     cmd = [
         str(sim), str(circuit),
         "--shots", str(shots),
@@ -135,7 +166,7 @@ def measure(
         "--p-readout", repr(float(noise["p_readout"])),
         "--json",
     ]  # fmt: skip
-    code, stdout, stderr, wall_s, rss = run_child(cmd)
+    code, stdout, stderr, wall_s, peak_bytes = run_child(cmd)
     if code != 0:
         how = (
             f"killed by signal {signal.Signals(-code).name}"
@@ -143,7 +174,11 @@ def measure(
             else f"exit status {code}"
         )
         raise RuntimeError(f"sim failed at n={n}: {how}\n{stderr.strip()}")
-    return {"counts": json.loads(stdout)["counts"], "wall_s": wall_s, "peak_rss_bytes": rss}
+    return {
+        "counts": json.loads(stdout)["counts"],
+        "wall_s": wall_s,
+        "peak_memory_bytes": peak_bytes,
+    }
 
 
 def run(args: argparse.Namespace) -> None:
@@ -184,7 +219,7 @@ def run(args: argparse.Namespace) -> None:
             points.append({
                 "n": n,
                 "wall_s": m["wall_s"],
-                "peak_rss_bytes": m["peak_rss_bytes"],
+                "peak_memory_bytes": m["peak_memory_bytes"],
                 "modeled_bytes": modeled_bytes,
                 "useful_flops": useful_flops,
                 "effective_bandwidth_gbps": bandwidth_gbps,
@@ -210,7 +245,7 @@ def run(args: argparse.Namespace) -> None:
             "shots": MANY_SHOTS,
             "noise": MANY_SHOTS_NOISE,
             "wall_s": m["wall_s"],
-            "peak_rss_bytes": m["peak_rss_bytes"],
+            "peak_memory_bytes": m["peak_memory_bytes"],
             "shots_per_s": MANY_SHOTS / m["wall_s"],
         }
 
@@ -224,7 +259,7 @@ def run(args: argparse.Namespace) -> None:
     print(path)
     print(
         f"n={args.max_n}: predicted {predicted_s:.3g} s, measured {largest['wall_s']:.3g} s, "
-        f"peak RSS {largest['peak_rss_bytes'] / 2**30:.3g} GiB"
+        f"peak memory {largest['peak_memory_bytes'] / 2**30:.3g} GiB"
     )
     print(f"n={MANY_SHOTS_N}, {MANY_SHOTS} noisy shots: {MANY_SHOTS / m['wall_s']:.4g} shots/s")
 
@@ -286,7 +321,7 @@ def summary(results: list[dict]) -> list[dict]:
         rows.append({
             "label": result["label"],
             "largest_n": largest["n"],
-            "peak_rss_bytes": largest["peak_rss_bytes"],
+            "peak_memory_bytes": largest["peak_memory_bytes"],
             "effective_bandwidth_gbps": largest["effective_bandwidth_gbps"],
             "fraction_of_peak": largest["fraction_of_peak"],
             "shots_per_s": result["many_shots"]["shots_per_s"],
@@ -308,13 +343,13 @@ def plot(results_dir: Path) -> None:
     plt.close(figure)
     print(path)
     print(
-        f"{'version':<16} {'max n':>5} {'peak RSS':>10} {'eff. BW':>12} {'% peak':>7} "
+        f"{'version':<16} {'max n':>5} {'peak memory':>11} {'eff. BW':>12} {'% peak':>7} "
         f"{'shots/s':>10} {'speed-up (n)':>14} {'shots speed-up':>14}"
     )
     for row in summary(results):
         print(
             f"{row['label']:<16} {row['largest_n']:>5} "
-            f"{row['peak_rss_bytes'] / 2**30:>6.3g} GiB "
+            f"{row['peak_memory_bytes'] / 2**30:>7.3g} GiB "
             f"{row['effective_bandwidth_gbps']:>7.3g} GB/s "
             f"{100 * row['fraction_of_peak']:>6.1f}% "
             f"{row['shots_per_s']:>10.4g} "
