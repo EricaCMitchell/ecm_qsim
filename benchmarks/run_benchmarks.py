@@ -24,6 +24,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.ticker import MaxNLocator  # noqa: E402
+from scipy.stats import chi2_contingency  # noqa: E402
 
 from ecm_qsim import brickwork  # noqa: E402
 
@@ -32,12 +33,16 @@ ANGLE_SEED = 42
 SIM_SEED = 42
 MANY_SHOTS_N = 12
 MANY_SHOTS = 100_000
+VERIFY_SHOTS = 10_000
 NOISELESS = {"p_gate": 0.0, "p_idle": 0.0, "p_readout": 0.0}
 MANY_SHOTS_NOISE = {"p_gate": 1e-3, "p_idle": 1e-3, "p_readout": 1e-2}
+NOISY_P_VALUE_MIN = 1e-3
+# Noisy outcomes are grouped by their noiseless count, capped at this value.
+IDEAL_COUNT_CAP = 4
 
 # One gate reads and writes every complex<double> amplitude once.
 BYTES_PER_AMPLITUDE = 32
-RY_FLOPS_PER_AMPLITUDE = 6
+RY_ALGORITHMIC_FLOPS_PER_AMPLITUDE = 6
 
 # Categorical colours in fixed order; the reference always takes the first.
 COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]
@@ -99,13 +104,13 @@ def run_child(cmd: list[str]) -> tuple[int, str, str, float, int]:
 
 
 def estimated_work(n: int, depth: int = DEPTH) -> tuple[int, int]:
-    """Modeled bytes moved and useful FLOPs for the n-qubit brickwork circuit."""
+    """Modeled bytes moved and algorithmic FLOPs for the brickwork circuit."""
     ry = depth * n
     odd_layers = (depth + 1) // 2
     cnot = odd_layers * (n // 2) + (depth - odd_layers) * ((n - 1) // 2)
     amplitudes = 2**n
     bytes_moved = (ry + cnot) * BYTES_PER_AMPLITUDE * amplitudes
-    flops = ry * RY_FLOPS_PER_AMPLITUDE * amplitudes
+    flops = ry * RY_ALGORITHMIC_FLOPS_PER_AMPLITUDE * amplitudes
     return bytes_moved, flops
 
 
@@ -174,11 +179,60 @@ def measure(
             else f"exit status {code}"
         )
         raise RuntimeError(f"sim failed at n={n}: {how}\n{stderr.strip()}")
+    counts = json.loads(stdout)["counts"]
+    if sum(counts.values()) != shots:
+        raise RuntimeError(f"sim counts at n={n} do not sum to {shots}")
     return {
-        "counts": json.loads(stdout)["counts"],
+        "counts": counts,
         "wall_s": wall_s,
         "peak_memory_bytes": peak_bytes,
     }
+
+
+def noisy_p_value(
+    ideal: dict[str, int], reference: dict[str, int], candidate: dict[str, int]
+) -> float:
+    """Chi-square p-value that two noisy histograms come from one distribution.
+
+    Outcomes are grouped by their count in the noiseless run `ideal`. Noise
+    moves shots from likely to unlikely outcomes, and these groups keep that
+    move visible when it is spread too thinly over single outcomes.
+    """
+    table = [[0] * (IDEAL_COUNT_CAP + 1) for _ in range(2)]
+    for row, counts in zip(table, (reference, candidate)):
+        for bits, count in counts.items():
+            row[min(ideal.get(bits, 0), IDEAL_COUNT_CAP)] += count
+    groups = [i for i in range(IDEAL_COUNT_CAP + 1) if table[0][i] + table[1][i] > 0]
+    table = [[row[i] for i in groups] for row in table]
+    return float(chi2_contingency(table, correction=False)[1])
+
+
+def verify_against_reference(sim: Path, reference_sim: Path, circuit: Path) -> dict:
+    """Compares sim with the reference sim and raises if the outputs differ."""
+
+    def counts(binary: Path, seed: int, noise: dict[str, float]) -> dict[str, int]:
+        return measure(
+            binary, circuit, n=MANY_SHOTS_N, shots=VERIFY_SHOTS, seed=seed, noise=noise
+        )["counts"]
+
+    # A different seed keeps the noiseless groups independent of the noisy samples.
+    ideal = counts(reference_sim, SIM_SEED + 1, NOISELESS)
+    if counts(sim, SIM_SEED + 1, NOISELESS) != ideal:
+        raise RuntimeError("noiseless counts differ from the reference")
+    p_value = noisy_p_value(
+        ideal,
+        counts(reference_sim, SIM_SEED, MANY_SHOTS_NOISE),
+        counts(sim, SIM_SEED, MANY_SHOTS_NOISE),
+    )
+    if p_value < NOISY_P_VALUE_MIN:
+        raise RuntimeError(
+            f"noisy counts are statistically different from the reference "
+            f"(chi-square p={p_value:.3g} < {NOISY_P_VALUE_MIN})"
+        )
+    return {
+        "n": MANY_SHOTS_N, "shots": VERIFY_SHOTS, "noiseless": "exact match",
+        "noisy_p_value": p_value,
+    }  # fmt: skip
 
 
 def run(args: argparse.Namespace) -> None:
@@ -203,6 +257,13 @@ def run(args: argparse.Namespace) -> None:
             path.write_text(brickwork.brickwork_circuit(n, DEPTH, ANGLE_SEED))
             return path
 
+        if args.reference_sim is None:
+            result["correctness"] = "reference"
+        else:
+            result["correctness"] = verify_against_reference(
+                args.sim, args.reference_sim, circuit(MANY_SHOTS_N)
+            )
+
         points = []
         for n in range(4, args.max_n + 1):
             if n == args.max_n:
@@ -214,14 +275,14 @@ def run(args: argparse.Namespace) -> None:
                     flush=True,
                 )
             m = measure(args.sim, circuit(n), n=n, shots=1, seed=SIM_SEED, noise=NOISELESS)
-            modeled_bytes, useful_flops = estimated_work(n)
+            modeled_bytes, algorithmic_flops = estimated_work(n)
             bandwidth_gbps = modeled_bytes / m["wall_s"] / 1e9
             points.append({
                 "n": n,
                 "wall_s": m["wall_s"],
                 "peak_memory_bytes": m["peak_memory_bytes"],
                 "modeled_bytes": modeled_bytes,
-                "useful_flops": useful_flops,
+                "algorithmic_flops": algorithmic_flops,
                 "effective_bandwidth_gbps": bandwidth_gbps,
                 "fraction_of_peak": bandwidth_gbps / args.peak_bandwidth_gbps,
             })  # fmt: skip
@@ -365,6 +426,10 @@ def main(argv: list[str] | None = None) -> int:
     run_parser = commands.add_parser("run", help="measure one version in both regimes")
     run_parser.add_argument("label", help="version name, e.g. reference")
     run_parser.add_argument("--sim", type=Path, required=True, help="sim executable")
+    run_parser.add_argument(
+        "--reference-sim", type=Path,
+        help="reference sim executable (required unless LABEL is reference)",
+    )
     run_parser.add_argument("--commit", required=True, help="commit the sim was built from")
     run_parser.add_argument(
         "--max-n", type=int, required=True, help="largest qubit count (at least 5)"
@@ -383,6 +448,8 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "run":
         if args.max_n < 5:
             run_parser.error("--max-n must be at least 5 to predict the largest n")
+        if args.label != "reference" and args.reference_sim is None:
+            run_parser.error("--reference-sim is required unless LABEL is reference")
         run(args)
     return 0
 

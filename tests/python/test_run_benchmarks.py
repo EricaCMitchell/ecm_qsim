@@ -94,7 +94,9 @@ def test_measure_builds_noiseless_command_and_returns_measurement(monkeypatch):
 
 def test_measure_builds_many_shots_command(monkeypatch):
     calls = []
-    monkeypatch.setattr(rb, "run_child", fake_child(0, '{"counts": {}}', calls=calls))
+    monkeypatch.setattr(
+        rb, "run_child", fake_child(0, '{"counts": {"000000000000": 100000}}', calls=calls)
+    )
     rb.measure(
         Path("sim"), Path("c.txt"), n=12, shots=rb.MANY_SHOTS, seed=rb.SIM_SEED,
         noise=rb.MANY_SHOTS_NOISE,
@@ -103,6 +105,33 @@ def test_measure_builds_many_shots_command(monkeypatch):
         "sim", "c.txt", "--shots", "100000", "--seed", "42",
         "--p-gate", "0.001", "--p-idle", "0.001", "--p-readout", "0.01", "--json",
     ]]  # fmt: skip
+
+
+def test_measure_rejects_counts_that_do_not_sum_to_shots(monkeypatch):
+    monkeypatch.setattr(rb, "run_child", fake_child(0, '{"counts": {"0000": 2}}'))
+    with pytest.raises(RuntimeError, match="do not sum to 1"):
+        rb.measure(Path("sim"), Path("c.txt"), n=4, shots=1, seed=42, noise=rb.NOISELESS)
+
+
+def test_noisy_p_value_accepts_matching_histograms():
+    ideal = {"00": 6, "11": 4}
+    p_value = rb.noisy_p_value(
+        ideal,
+        {"00": 4900, "01": 100, "10": 110, "11": 4890},
+        {"00": 4880, "01": 105, "10": 95, "11": 4920},
+    )
+    assert p_value > rb.NOISY_P_VALUE_MIN
+
+
+def test_noisy_p_value_detects_less_noise_spread_over_many_outcomes():
+    # Noise moves shots from the likely to the unlikely outcomes. Spread over
+    # 4096 outcomes, the move is too small to see one outcome at a time.
+    outcomes = [f"{i:012b}" for i in range(4096)]
+    likely = set(outcomes[::2])
+    ideal = {bits: 4 for bits in likely}
+    reference = {bits: 3 if bits in likely else 2 for bits in outcomes}
+    candidate = {bits: 4 if bits in likely else 1 for bits in outcomes}
+    assert rb.noisy_p_value(ideal, reference, candidate) < rb.NOISY_P_VALUE_MIN
 
 
 def test_measure_reports_nonzero_exit_status_with_n_and_stderr(monkeypatch):
@@ -183,14 +212,17 @@ MACHINE = {
 }  # fmt: skip
 
 
-def run_args(tmp_path, label="reference", max_n=6):
+def run_args(tmp_path, label="reference", max_n=6, reference_sim=None):
     sim = tmp_path / "sim"
     sim.touch()
-    return [
+    args = [
         "run", label, "--sim", str(sim), "--commit", "abc1234", "--max-n", str(max_n),
         "--peak-bandwidth-gbps", "100", "--compiler", "Apple clang 21",
         "--compiler-flags", "-O3 -DNDEBUG", "--results-dir", str(tmp_path / "results"),
     ]  # fmt: skip
+    if reference_sim is not None:
+        args += ["--reference-sim", str(reference_sim)]
+    return args
 
 
 def fake_measure(calls, capsys, max_n, fail_at=None):
@@ -239,7 +271,7 @@ def test_run_measures_both_regimes_and_saves_result(tmp_path, monkeypatch, capsy
     assert [p["n"] for p in points] == [4, 5, 6]
     bytes_6, flops_6 = rb.estimated_work(6)
     assert points[2]["modeled_bytes"] == bytes_6
-    assert points[2]["useful_flops"] == flops_6
+    assert points[2]["algorithmic_flops"] == flops_6
     assert points[2]["effective_bandwidth_gbps"] == pytest.approx(bytes_6 / 64e-6 / 1e9)
     assert points[2]["fraction_of_peak"] == pytest.approx(bytes_6 / 64e-6 / 1e9 / 100)
     assert result["many_qubits"]["prediction"] == {
@@ -269,6 +301,75 @@ def test_run_rejects_max_n_without_a_point_to_predict_from(tmp_path, capsys):
     assert "--max-n must be at least 5" in capsys.readouterr().err
 
 
+def test_nonreference_run_requires_reference_sim(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        rb.main(run_args(tmp_path, label="optimized"))
+    assert exit_info.value.code == 2
+    assert "--reference-sim is required" in capsys.readouterr().err
+
+
+def fake_verify_measure(calls, noiseless=None, noisy=None):
+    """measure() for a candidate and a binary named "reference"."""
+
+    def measured(sim, circuit, *, n, shots, seed, noise):
+        calls.append((Path(sim).name, n, shots, seed, noise == rb.NOISELESS))
+        candidate = Path(sim).name != "reference"
+        if noise == rb.NOISELESS:
+            counts = noiseless if candidate and noiseless else {"0" * n: 9997, "1" * n: 3}
+        else:
+            counts = noisy if candidate and noisy else {"0" * n: 5050, "1" * n: 4950}
+        return {"counts": counts, "wall_s": 1.0, "peak_memory_bytes": 1}
+
+    return measured
+
+
+def test_verify_against_reference_records_both_checks(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(rb, "measure", fake_verify_measure(calls))
+    result = rb.verify_against_reference(
+        Path("candidate"), Path("reference"), tmp_path / "circuit.txt"
+    )
+
+    assert result == {
+        "n": 12, "shots": 10_000, "noiseless": "exact match", "noisy_p_value": 1.0
+    }  # fmt: skip
+    assert calls == [
+        ("reference", 12, 10_000, 43, True), ("candidate", 12, 10_000, 43, True),
+        ("reference", 12, 10_000, 42, False), ("candidate", 12, 10_000, 42, False),
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "candidate, message",
+    [
+        ({"noiseless": {"0" * 12: 9996, "1" * 12: 4}}, "noiseless counts differ"),
+        ({"noisy": {"0" * 12: 9000, "1" * 12: 1000}}, "statistically different"),
+    ],
+)
+def test_verify_against_reference_rejects_different_output(
+    monkeypatch, tmp_path, candidate, message
+):
+    monkeypatch.setattr(rb, "measure", fake_verify_measure([], **candidate))
+    with pytest.raises(RuntimeError, match=message):
+        rb.verify_against_reference(
+            Path("candidate"), Path("reference"), tmp_path / "circuit.txt"
+        )
+
+
+def test_optimized_run_records_reference_verification(tmp_path, monkeypatch, capsys):
+    reference_sim = tmp_path / "reference"
+    reference_sim.touch()
+    evidence = {"n": 12, "shots": 10_000, "noiseless": "exact match", "noisy_p_value": 0.5}
+    monkeypatch.setattr(rb, "machine_info", lambda: MACHINE)
+    monkeypatch.setattr(rb, "measure", fake_measure([], capsys, max_n=6))
+    monkeypatch.setattr(rb, "verify_against_reference", lambda *args: evidence)
+
+    rb.main(run_args(tmp_path, label="optimized", reference_sim=reference_sim))
+
+    result = json.loads((tmp_path / "results" / "optimized.json").read_text())
+    assert result["correctness"] == evidence
+
+
 def synthetic_result(label, walls, shots_per_s):
     largest = max(walls)
     result = {
@@ -281,7 +382,7 @@ def synthetic_result(label, walls, shots_per_s):
                 {
                     "n": n, "wall_s": s, "peak_memory_bytes": 16 << n,
                     "modeled_bytes": rb.estimated_work(n)[0],
-                    "useful_flops": rb.estimated_work(n)[1],
+                    "algorithmic_flops": rb.estimated_work(n)[1],
                     "effective_bandwidth_gbps": rb.estimated_work(n)[0] / s / 1e9,
                     "fraction_of_peak": rb.estimated_work(n)[0] / s / 1e9 / 100,
                 }
