@@ -1,9 +1,12 @@
 import importlib.util
+import json
 import signal
 import sys
 from pathlib import Path
 
 import pytest
+
+from ecm_qsim import brickwork
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "benchmarks" / "run_benchmarks.py"
@@ -144,3 +147,95 @@ def test_machine_info_rejects_unsupported_platform(monkeypatch):
     monkeypatch.setattr(rb.platform, "system", lambda: "Windows")
     with pytest.raises(RuntimeError, match="Windows"):
         rb.machine_info()
+
+
+MACHINE = {
+    "cpu_model": "Test CPU", "physical_cores": 4, "memory_bytes": 8 << 30,
+    "os": "TestOS-1", "gpu": "not used",
+}  # fmt: skip
+
+
+def run_args(tmp_path, label="reference", max_n=6):
+    sim = tmp_path / "sim"
+    sim.touch()
+    return [
+        "run", label, "--sim", str(sim), "--commit", "abc1234", "--max-n", str(max_n),
+        "--peak-bandwidth-gbps", "100", "--compiler", "Apple clang 21",
+        "--compiler-flags", "-O3 -DNDEBUG", "--results-dir", str(tmp_path / "results"),
+    ]  # fmt: skip
+
+
+def fake_measure(calls, capsys, max_n, fail_at=None):
+    def measure(sim, circuit, *, n, shots, seed, noise):
+        printed = capsys.readouterr().out
+        calls.append({
+            "n": n, "shots": shots, "seed": seed, "noise": noise,
+            "circuit": Path(circuit).read_text(), "printed_before": printed,
+        })  # fmt: skip
+        if n == fail_at:
+            raise RuntimeError(f"sim failed at n={n}")
+        return {"counts": {"0" * n: shots}, "wall_s": 1e-6 * 2**n, "peak_rss_bytes": 16 << n}
+
+    return measure
+
+
+def test_run_measures_both_regimes_and_saves_result(tmp_path, monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(rb, "machine_info", lambda: MACHINE)
+    monkeypatch.setattr(rb, "measure", fake_measure(calls, capsys, max_n=6))
+    assert rb.main(run_args(tmp_path)) == 0
+
+    assert [c["n"] for c in calls] == [4, 5, 6, 12]
+    assert all(c["seed"] == rb.SIM_SEED for c in calls)
+    for c in calls[:3]:
+        assert (c["shots"], c["noise"]) == (1, rb.NOISELESS)
+        assert c["circuit"] == brickwork.brickwork_circuit(c["n"], 20, 42)
+    noisy = calls[3]
+    assert (noisy["shots"], noisy["noise"]) == (100_000, rb.MANY_SHOTS_NOISE)
+    assert noisy["circuit"] == brickwork.brickwork_circuit(12, 20, 42)
+    predicted = rb.predict_seconds(5, 1e-6 * 2**5, 6)
+    assert "n=6" in calls[2]["printed_before"]
+    assert f"{predicted:.3g}" in calls[2]["printed_before"]
+
+    path = tmp_path / "results" / "reference.json"
+    result = json.loads(path.read_text())
+    assert result["label"] == "reference"
+    assert result["commit"] == "abc1234"
+    assert result["compiler"] == "Apple clang 21"
+    assert result["compiler_flags"] == "-O3 -DNDEBUG"
+    assert result["machine"] == MACHINE
+    assert (result["depth"], result["angle_seed"], result["sim_seed"]) == (20, 42, 42)
+    assert result["date"]
+
+    points = result["many_qubits"]["points"]
+    assert [p["n"] for p in points] == [4, 5, 6]
+    bytes_6, flops_6 = rb.estimated_work(6)
+    assert points[2]["modeled_bytes"] == bytes_6
+    assert points[2]["useful_flops"] == flops_6
+    assert points[2]["effective_bandwidth_gbps"] == pytest.approx(bytes_6 / 64e-6 / 1e9)
+    assert points[2]["fraction_of_peak"] == pytest.approx(bytes_6 / 64e-6 / 1e9 / 100)
+    assert result["many_qubits"]["prediction"] == {
+        "n": 6, "from_n": 5, "predicted_s": pytest.approx(predicted),
+        "measured_s": pytest.approx(64e-6),
+    }  # fmt: skip
+
+    shots = result["many_shots"]
+    assert (shots["n"], shots["shots"]) == (12, 100_000)
+    assert shots["noise"] == rb.MANY_SHOTS_NOISE
+    assert shots["shots_per_s"] == pytest.approx(100_000 / (1e-6 * 2**12))
+    assert str(path) in capsys.readouterr().out
+
+
+def test_run_writes_nothing_when_a_measurement_fails(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(rb, "machine_info", lambda: MACHINE)
+    monkeypatch.setattr(rb, "measure", fake_measure([], capsys, max_n=6, fail_at=12))
+    with pytest.raises(RuntimeError, match="n=12"):
+        rb.main(run_args(tmp_path))
+    assert list((tmp_path / "results").glob("*")) == []
+
+
+def test_run_rejects_max_n_without_a_point_to_predict_from(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        rb.main(run_args(tmp_path, max_n=4))
+    assert exit_info.value.code == 2
+    assert "--max-n must be at least 5" in capsys.readouterr().err
