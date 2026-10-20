@@ -239,3 +239,103 @@ def test_run_rejects_max_n_without_a_point_to_predict_from(tmp_path, capsys):
         rb.main(run_args(tmp_path, max_n=4))
     assert exit_info.value.code == 2
     assert "--max-n must be at least 5" in capsys.readouterr().err
+
+
+def synthetic_result(label, walls, shots_per_s):
+    largest = max(walls)
+    result = {
+        "label": label, "sim": f"/bin/{label}", "commit": "abc", "date": "2026-10-19",
+        "machine": dict(MACHINE), "compiler": "Apple clang 21",
+        "compiler_flags": "-O3 -DNDEBUG", "peak_bandwidth_gbps": 100.0,
+        "depth": 20, "angle_seed": 42, "sim_seed": 42,
+        "many_qubits": {
+            "points": [
+                {
+                    "n": n, "wall_s": s, "peak_rss_bytes": 16 << n,
+                    "modeled_bytes": rb.estimated_work(n)[0],
+                    "useful_flops": rb.estimated_work(n)[1],
+                    "effective_bandwidth_gbps": rb.estimated_work(n)[0] / s / 1e9,
+                    "fraction_of_peak": rb.estimated_work(n)[0] / s / 1e9 / 100,
+                }
+                for n, s in sorted(walls.items())
+            ],
+            "prediction": {
+                "n": largest, "from_n": largest - 1,
+                "predicted_s": 0.9 * walls[largest], "measured_s": walls[largest],
+            },
+        },
+        "many_shots": {
+            "n": 12, "shots": 100_000, "noise": rb.MANY_SHOTS_NOISE,
+            "wall_s": 100_000 / shots_per_s, "peak_rss_bytes": 1 << 20,
+            "shots_per_s": shots_per_s,
+        },
+    }  # fmt: skip
+    return result
+
+
+REFERENCE = synthetic_result("reference", {4: 1.0, 5: 2.0, 6: 4.0}, 1000.0)
+OPTIMIZED = synthetic_result("optimized", {4: 0.5, 5: 0.5, 6: 1.0, 7: 2.0}, 4000.0)
+
+
+def write_results(directory, *results):
+    directory.mkdir(parents=True, exist_ok=True)
+    for result in results:
+        (directory / f"{result['label']}.json").write_text(json.dumps(result))
+
+
+def test_draw_plots_one_log_scaled_line_per_version():
+    figure = rb.draw([REFERENCE, OPTIMIZED])
+    (axes,) = figure.axes
+    assert axes.get_yscale() == "log"
+    assert axes.get_xlabel() == "qubits n"
+    assert [line.get_label() for line in axes.lines if not line.get_label().startswith("_")][
+        :2
+    ] == ["reference", "optimized"]
+    reference_line = next(line for line in axes.lines if line.get_label() == "reference")
+    assert list(reference_line.get_xdata()) == [4, 5, 6]
+    assert list(reference_line.get_ydata()) == [1.0, 2.0, 4.0]
+
+
+def test_draw_marks_each_prediction_with_a_hollow_marker():
+    figure = rb.draw([REFERENCE, OPTIMIZED])
+    predictions = [
+        line for line in figure.axes[0].lines
+        if line.get_marker() == "o" and line.get_markerfacecolor() == "none"
+    ]  # fmt: skip
+    assert sorted((list(p.get_xdata()), list(p.get_ydata())) for p in predictions) == [
+        ([6], [pytest.approx(3.6)]),
+        ([7], [pytest.approx(1.8)]),
+    ]
+
+
+def test_summary_reports_speed_ups_against_the_reference():
+    reference, optimized = rb.summary([REFERENCE, OPTIMIZED])
+    assert reference["label"] == "reference"
+    assert (reference["largest_n"], reference["many_qubits_speed_up"]) == (6, 1.0)
+    assert optimized["largest_n"] == 7
+    assert optimized["peak_rss_bytes"] == 16 << 7
+    assert optimized["effective_bandwidth_gbps"] == pytest.approx(
+        rb.estimated_work(7)[0] / 2.0 / 1e9
+    )
+    assert optimized["fraction_of_peak"] == pytest.approx(rb.estimated_work(7)[0] / 2e11)
+    assert optimized["shots_per_s"] == 4000.0
+    # Largest common n is 6: 4.0 s against 1.0 s.
+    assert optimized["common_n"] == 6
+    assert optimized["many_qubits_speed_up"] == pytest.approx(4.0)
+    assert optimized["many_shots_speed_up"] == pytest.approx(4.0)
+
+
+def test_plot_writes_png_and_prints_table(tmp_path, capsys):
+    write_results(tmp_path, REFERENCE, OPTIMIZED)
+    assert rb.main(["plot", "--results-dir", str(tmp_path)]) == 0
+    png = tmp_path / "time_vs_n.png"
+    assert png.stat().st_size > 0
+    captured = capsys.readouterr()
+    assert str(png) in captured.out
+    assert "optimized" in captured.out and "4.00x" in captured.out
+
+
+def test_plot_requires_a_reference_result(tmp_path):
+    write_results(tmp_path, OPTIMIZED)
+    with pytest.raises(SystemExit, match="reference.json"):
+        rb.main(["plot", "--results-dir", str(tmp_path)])

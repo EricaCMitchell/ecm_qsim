@@ -17,7 +17,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ecm_qsim import brickwork
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
+from matplotlib.ticker import MaxNLocator  # noqa: E402
+
+from ecm_qsim import brickwork  # noqa: E402
 
 DEPTH = 20
 ANGLE_SEED = 42
@@ -30,6 +37,9 @@ MANY_SHOTS_NOISE = {"p_gate": 1e-3, "p_idle": 1e-3, "p_readout": 1e-2}
 # One gate reads and writes every complex<double> amplitude once.
 BYTES_PER_AMPLITUDE = 32
 RY_FLOPS_PER_AMPLITUDE = 6
+
+# Categorical colours in fixed order; the reference always takes the first.
+COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 MEMINFO = Path("/proc/meminfo")
@@ -219,6 +229,100 @@ def run(args: argparse.Namespace) -> None:
     print(f"n={MANY_SHOTS_N}, {MANY_SHOTS} noisy shots: {MANY_SHOTS / m['wall_s']:.4g} shots/s")
 
 
+def load_results(results_dir: Path) -> list[dict]:
+    """Every result in results_dir, with the reference first."""
+    results = {
+        path.stem: json.loads(path.read_text()) for path in sorted(results_dir.glob("*.json"))
+    }
+    if "reference" not in results:
+        sys.exit(f"no reference.json in {results_dir}: run the reference first")
+    reference = results.pop("reference")
+    return [reference, *results.values()]
+
+
+def draw(results: list[dict]) -> plt.Figure:
+    """Wall time against n, one line per version, predictions as hollow markers."""
+    figure, axes = plt.subplots(figsize=(7, 4.5), layout="constrained")
+    for result, color in zip(results, COLORS):
+        points = result["many_qubits"]["points"]
+        axes.plot(
+            [p["n"] for p in points], [p["wall_s"] for p in points],
+            color=color, linewidth=2, marker="o", markersize=5, label=result["label"],
+        )  # fmt: skip
+        prediction = result["many_qubits"]["prediction"]
+        axes.plot(
+            [prediction["n"]], [prediction["predicted_s"]],
+            linestyle="none", marker="o", markersize=9, markerfacecolor="none",
+            markeredgecolor=color, markeredgewidth=1.5,
+        )  # fmt: skip
+    handles, _ = axes.get_legend_handles_labels()
+    handles.append(Line2D(
+        [], [], linestyle="none", marker="o", markersize=9, markerfacecolor="none",
+        markeredgecolor="#555555", label="predicted before the run",
+    ))  # fmt: skip
+    axes.legend(handles=handles, frameon=False)
+    axes.set_yscale("log")
+    axes.set_xlabel("qubits n")
+    axes.set_ylabel("wall time (s)")
+    axes.set_title(f"Brickwork circuit, depth {results[0]['depth']}, one noiseless shot")
+    axes.xaxis.set_major_locator(MaxNLocator(integer=True))
+    axes.grid(True, which="major", color="#e0e0e0", linewidth=0.8)
+    axes.set_axisbelow(True)
+    for side in ("top", "right"):
+        axes.spines[side].set_visible(False)
+    return figure
+
+
+def summary(results: list[dict]) -> list[dict]:
+    """Per version: the largest-n point, shots/s, and speed-ups against results[0]."""
+    reference = results[0]
+    reference_s = {p["n"]: p["wall_s"] for p in reference["many_qubits"]["points"]}
+    rows = []
+    for result in results:
+        points = result["many_qubits"]["points"]
+        largest = points[-1]
+        common_n = max(p["n"] for p in points if p["n"] in reference_s)
+        wall_s = next(p["wall_s"] for p in points if p["n"] == common_n)
+        rows.append({
+            "label": result["label"],
+            "largest_n": largest["n"],
+            "peak_rss_bytes": largest["peak_rss_bytes"],
+            "effective_bandwidth_gbps": largest["effective_bandwidth_gbps"],
+            "fraction_of_peak": largest["fraction_of_peak"],
+            "shots_per_s": result["many_shots"]["shots_per_s"],
+            "common_n": common_n,
+            "many_qubits_speed_up": reference_s[common_n] / wall_s,
+            "many_shots_speed_up": (
+                result["many_shots"]["shots_per_s"] / reference["many_shots"]["shots_per_s"]
+            ),
+        })  # fmt: skip
+    return rows
+
+
+def plot(results_dir: Path) -> None:
+    """Writes time_vs_n.png and prints the summary table."""
+    results = load_results(results_dir)
+    path = results_dir / "time_vs_n.png"
+    figure = draw(results)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    print(path)
+    print(
+        f"{'version':<16} {'max n':>5} {'peak RSS':>10} {'eff. BW':>12} {'% peak':>7} "
+        f"{'shots/s':>10} {'speed-up (n)':>14} {'shots speed-up':>14}"
+    )
+    for row in summary(results):
+        print(
+            f"{row['label']:<16} {row['largest_n']:>5} "
+            f"{row['peak_rss_bytes'] / 2**30:>6.3g} GiB "
+            f"{row['effective_bandwidth_gbps']:>7.3g} GB/s "
+            f"{100 * row['fraction_of_peak']:>6.1f}% "
+            f"{row['shots_per_s']:>10.4g} "
+            f"{row['many_qubits_speed_up']:>8.2f}x ({row['common_n']:>2}) "
+            f"{row['many_shots_speed_up']:>13.2f}x"
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -235,8 +339,13 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument("--compiler-flags", required=True, help="e.g. '-O3 -DNDEBUG'")
     run_parser.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
 
+    plot_parser = commands.add_parser("plot", help="plot every result in the directory")
+    plot_parser.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
+
     args = parser.parse_args(argv)
-    if args.command == "run":
+    if args.command == "plot":
+        plot(args.results_dir)
+    elif args.command == "run":
         if args.max_n < 5:
             run_parser.error("--max-n must be at least 5 to predict the largest n")
         run(args)

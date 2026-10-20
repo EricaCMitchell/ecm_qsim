@@ -20,3 +20,6 @@ experiments/*.png
 
 # Benchmark circuits
 benchmarks/circuits/
+
+# Benchmark results, plots and profiles
+benchmarks/results/
