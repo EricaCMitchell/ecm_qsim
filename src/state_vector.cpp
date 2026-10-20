@@ -213,7 +213,8 @@ void StateVector::apply_cnot(int control, int target) {
   const std::uint64_t dim = size();
   // high_base + middle + offset runs over every index with both gate bits
   // clear, each once: 2^(n-2) indices.
-  for (std::uint64_t high_base = 0; high_base < dim; high_base += 2 * high_bit) {
+  for (std::uint64_t high_base = 0; high_base < dim;
+       high_base += 2 * high_bit) {
     for (std::uint64_t middle = 0; middle < high_bit; middle += 2 * low_bit) {
       for (std::uint64_t offset = 0; offset < low_bit; ++offset) {
         const std::uint64_t i = high_base + middle + offset + control_bit;

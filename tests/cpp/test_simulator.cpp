@@ -139,13 +139,12 @@ TEST_CASE("simulate matches the general kernels on a noisy brickwork circuit") {
     circuit.timesteps.push_back(rotations);
     circuit.timesteps.push_back(entanglers);
   }
-  circuit.timesteps.push_back(TimeStep{{Op{GateType::CNOT, {4, 1}, 0.0},
-                                        Op{GateType::H, {2, 0}, 0.0}}});
-  const std::vector<PauliError> errors{PauliError{0, 3, GateType::X},
-                                       PauliError{1, 0, GateType::Y},
-                                       PauliError{1, 4, GateType::Z},
-                                       PauliError{4, 2, GateType::Y},
-                                       PauliError{6, 1, GateType::X}};
+  circuit.timesteps.push_back(TimeStep{
+      {Op{GateType::CNOT, {4, 1}, 0.0}, Op{GateType::H, {2, 0}, 0.0}}});
+  const std::vector<PauliError> errors{
+      PauliError{0, 3, GateType::X}, PauliError{1, 0, GateType::Y},
+      PauliError{1, 4, GateType::Z}, PauliError{4, 2, GateType::Y},
+      PauliError{6, 1, GateType::X}};
 
   // Reference: only apply_1q and apply_2q, errors after their step's gates.
   StateVector expected(kQubits);
