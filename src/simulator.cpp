@@ -11,8 +11,14 @@ namespace ecm_qsim {
 
 namespace {
 
+// RY and CNOT, the brickwork benchmark's gates, take the specialized
+// kernels; every other gate takes the general matrix kernels.
 void apply_op(StateVector& state, const Op& op) {
-  if (is_two_qubit(op.gate)) {
+  if (op.gate == GateType::RY) {
+    state.apply_ry(op.theta, op.qubits[0]);
+  } else if (op.gate == GateType::CNOT) {
+    state.apply_cnot(op.qubits[0], op.qubits[1]);
+  } else if (is_two_qubit(op.gate)) {
     state.apply_2q(matrix_2q(op.gate), op.qubits[0], op.qubits[1]);
   } else {
     state.apply_1q(matrix_1q(op.gate, op.theta), op.qubits[0]);

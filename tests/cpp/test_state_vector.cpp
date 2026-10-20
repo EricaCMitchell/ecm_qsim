@@ -432,3 +432,58 @@ TEST_CASE("apply_2q rejects bad qubit pairs") {
   REQUIRE_THROWS_AS(state.apply_2q(cnot, -1, 0), std::out_of_range);
   REQUIRE_THROWS_AS(state.apply_2q(cnot, 3, 0), std::out_of_range);
 }
+
+TEST_CASE("apply_ry matches apply_1q with the RY matrix") {
+  std::mt19937_64 rng(kSeed);
+  for (const double theta : {0.0, 0.3, std::numbers::pi, 5.9}) {
+    for (int n = 1; n <= 8; ++n) {
+      for (int q = 0; q < n; ++q) {
+        CAPTURE(theta, n, q);
+        const Eigen::VectorXcd psi = random_state(n, rng).normalized();
+        StateVector expected(psi);
+        expected.apply_1q(matrix_1q(GateType::RY, theta), q);
+        StateVector state(psi);
+        state.apply_ry(theta, q);
+        require_close(state.to_vector(), expected.to_vector());
+      }
+    }
+  }
+}
+
+TEST_CASE("apply_cnot matches apply_2q with the CNOT matrix") {
+  // Every ordered pair: control below and above the target, adjacent and
+  // distant qubits.
+  std::mt19937_64 rng(kSeed);
+  for (int n = 2; n <= 8; ++n) {
+    for (int c = 0; c < n; ++c) {
+      for (int t = 0; t < n; ++t) {
+        if (c == t) {
+          continue;
+        }
+        CAPTURE(n, c, t);
+        const Eigen::VectorXcd psi = random_state(n, rng).normalized();
+        StateVector expected(psi);
+        expected.apply_2q(matrix_2q(GateType::CNOT), c, t);
+        StateVector state(psi);
+        state.apply_cnot(c, t);
+        require_close(state.to_vector(), expected.to_vector());
+      }
+    }
+  }
+}
+
+TEST_CASE("apply_ry rejects a qubit outside the state") {
+  const int q = GENERATE(-1, 3, 64);
+  CAPTURE(q);
+  StateVector state(3);
+  REQUIRE_THROWS_AS(state.apply_ry(0.3, q), std::out_of_range);
+}
+
+TEST_CASE("apply_cnot rejects bad qubit pairs") {
+  StateVector state(3);
+  REQUIRE_THROWS_AS(state.apply_cnot(1, 1), std::invalid_argument);
+  REQUIRE_THROWS_AS(state.apply_cnot(0, 3), std::out_of_range);
+  REQUIRE_THROWS_AS(state.apply_cnot(-1, 0), std::out_of_range);
+  REQUIRE_THROWS_AS(state.apply_cnot(3, 0), std::out_of_range);
+  REQUIRE_THROWS_AS(state.apply_cnot(0, 64), std::out_of_range);
+}

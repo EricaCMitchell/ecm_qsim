@@ -135,7 +135,7 @@ of its time from the time at `--max-n - 1`. If a run fails, the script stops and
 To measure an optimized version, give it its own label and binary:
 
 ```sh
-$P benchmarks/run_benchmarks.py run simd --sim build/release/sim \
+$P benchmarks/run_benchmarks.py run specialized --sim build/release/sim \
     --reference-sim build/reference/build/sim \
     --commit "$(git rev-parse HEAD)" --max-n 29 --peak-bandwidth-gbps 100 \
     --compiler "Apple clang 21.0.0 (clang-2100.3.34.2)" --compiler-flags "-O3 -DNDEBUG"

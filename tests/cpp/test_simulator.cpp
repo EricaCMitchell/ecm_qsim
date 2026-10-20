@@ -3,6 +3,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <numbers>
@@ -11,6 +12,7 @@
 #include <vector>
 
 #include "ecm_qsim/circuit.hpp"
+#include "ecm_qsim/gates.hpp"
 #include "ecm_qsim/measurement.hpp"
 #include "ecm_qsim/noise.hpp"
 #include "ecm_qsim/parser.hpp"
@@ -115,6 +117,57 @@ TEST_CASE("simulate applies the Pauli matrix of each error, in step order") {
   require_basis_state(simulate(circuit, {PauliError{0, 0, GateType::X},
                                          PauliError{1, 0, GateType::Z}}),
                       1, -1.0);
+}
+
+TEST_CASE("simulate matches the general kernels on a noisy brickwork circuit") {
+  // Three brickwork layers on 5 qubits (RY on every qubit, then CNOTs on
+  // alternating neighboring pairs), plus a reversed CNOT and an H that take
+  // the general paths, and X, Y and Z errors.
+  constexpr int kQubits = 5;
+  Circuit circuit{kQubits, {}};
+  double theta = 0.1;
+  for (int layer = 0; layer < 3; ++layer) {
+    TimeStep rotations;
+    for (int q = 0; q < kQubits; ++q) {
+      rotations.ops.push_back(Op{GateType::RY, {q, 0}, theta});
+      theta += 0.7;
+    }
+    TimeStep entanglers;
+    for (int q = layer % 2; q + 1 < kQubits; q += 2) {
+      entanglers.ops.push_back(Op{GateType::CNOT, {q, q + 1}, 0.0});
+    }
+    circuit.timesteps.push_back(rotations);
+    circuit.timesteps.push_back(entanglers);
+  }
+  circuit.timesteps.push_back(TimeStep{
+      {Op{GateType::CNOT, {4, 1}, 0.0}, Op{GateType::H, {2, 0}, 0.0}}});
+  const std::vector<PauliError> errors{
+      PauliError{0, 3, GateType::X}, PauliError{1, 0, GateType::Y},
+      PauliError{1, 4, GateType::Z}, PauliError{4, 2, GateType::Y},
+      PauliError{6, 1, GateType::X}};
+
+  // Reference: only apply_1q and apply_2q, errors after their step's gates.
+  StateVector expected(kQubits);
+  std::size_t next = 0;
+  for (std::size_t t = 0; t < circuit.timesteps.size(); ++t) {
+    for (const Op& op : circuit.timesteps[t].ops) {
+      if (is_two_qubit(op.gate)) {
+        expected.apply_2q(matrix_2q(op.gate), op.qubits[0], op.qubits[1]);
+      } else {
+        expected.apply_1q(matrix_1q(op.gate, op.theta), op.qubits[0]);
+      }
+    }
+    for (; next < errors.size() && errors[next].timestep == t; ++next) {
+      expected.apply_1q(matrix_1q(errors[next].pauli), errors[next].qubit);
+    }
+  }
+
+  const StateVector state = simulate(circuit, errors);
+  for (std::uint64_t i = 0; i < state.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(state.amplitude(i).real() == near(expected.amplitude(i).real()));
+    REQUIRE(state.amplitude(i).imag() == near(expected.amplitude(i).imag()));
+  }
 }
 
 TEST_CASE("simulate rejects bad errors") {
