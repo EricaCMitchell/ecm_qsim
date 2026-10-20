@@ -40,6 +40,27 @@ void require_basis_state(const StateVector& state, std::uint64_t index,
   }
 }
 
+// The trajectory with one general-kernel call for each gate: apply_1q and
+// apply_2q only, each step's errors after its gates.
+StateVector general_kernels(const Circuit& circuit,
+                            const std::vector<PauliError>& errors) {
+  StateVector state(circuit.n_qubits);
+  std::size_t next = 0;
+  for (std::size_t t = 0; t < circuit.timesteps.size(); ++t) {
+    for (const Op& op : circuit.timesteps[t].ops) {
+      if (is_two_qubit(op.gate)) {
+        state.apply_2q(matrix_2q(op.gate), op.qubits[0], op.qubits[1]);
+      } else {
+        state.apply_1q(matrix_1q(op.gate, op.theta), op.qubits[0]);
+      }
+    }
+    for (; next < errors.size() && errors[next].timestep == t; ++next) {
+      state.apply_1q(matrix_1q(errors[next].pauli), errors[next].qubit);
+    }
+  }
+  return state;
+}
+
 // counts[bits], or 0 if bits never occurred.
 int count_of(const Counts& counts, const std::string& bits) {
   const auto it = counts.find(bits);
@@ -146,27 +167,43 @@ TEST_CASE("simulate matches the general kernels on a noisy brickwork circuit") {
       PauliError{1, 4, GateType::Z}, PauliError{4, 2, GateType::Y},
       PauliError{6, 1, GateType::X}};
 
-  // Reference: only apply_1q and apply_2q, errors after their step's gates.
-  StateVector expected(kQubits);
-  std::size_t next = 0;
-  for (std::size_t t = 0; t < circuit.timesteps.size(); ++t) {
-    for (const Op& op : circuit.timesteps[t].ops) {
-      if (is_two_qubit(op.gate)) {
-        expected.apply_2q(matrix_2q(op.gate), op.qubits[0], op.qubits[1]);
-      } else {
-        expected.apply_1q(matrix_1q(op.gate, op.theta), op.qubits[0]);
-      }
-    }
-    for (; next < errors.size() && errors[next].timestep == t; ++next) {
-      expected.apply_1q(matrix_1q(errors[next].pauli), errors[next].qubit);
-    }
-  }
+  require_close(simulate(circuit, errors).to_vector(),
+                general_kernels(circuit, errors).to_vector());
+}
 
-  const StateVector state = simulate(circuit, errors);
-  for (std::uint64_t i = 0; i < state.size(); ++i) {
+TEST_CASE("simulate matches the general kernels on depth-20 brickwork") {
+  // Every RY and CNOT of the benchmark circuit, fused, against one
+  // general-kernel call for each gate.
+  constexpr int kQubits = 8;
+  constexpr int kDepth = 20;
+  Circuit circuit{kQubits, {}};
+  double theta = 0.2;
+  for (int layer = 1; layer <= kDepth; ++layer) {
+    TimeStep rotations;
+    for (int q = 0; q < kQubits; ++q) {
+      rotations.ops.push_back(Op{GateType::RY, {q, 0}, theta});
+      theta += 0.37;
+    }
+    TimeStep entanglers;
+    for (int q = layer % 2 == 1 ? 0 : 1; q + 1 < kQubits; q += 2) {
+      entanglers.ops.push_back(Op{GateType::CNOT, {q, q + 1}, 0.0});
+    }
+    circuit.timesteps.push_back(rotations);
+    circuit.timesteps.push_back(entanglers);
+  }
+  const std::vector<std::vector<PauliError>> trajectories{
+      {},
+      {PauliError{0, 0, GateType::X}},
+      {PauliError{3, 7, GateType::Y}, PauliError{3, 2, GateType::Z},
+       PauliError{20, 4, GateType::X}},
+      {PauliError{0, 1, GateType::Z}, PauliError{1, 1, GateType::Y},
+       PauliError{17, 5, GateType::Y}, PauliError{39, 0, GateType::X},
+       PauliError{39, 7, GateType::Z}},
+  };
+  for (std::size_t i = 0; i < trajectories.size(); ++i) {
     CAPTURE(i);
-    REQUIRE(state.amplitude(i).real() == near(expected.amplitude(i).real()));
-    REQUIRE(state.amplitude(i).imag() == near(expected.amplitude(i).imag()));
+    require_close(simulate(circuit, trajectories[i]).to_vector(),
+                  general_kernels(circuit, trajectories[i]).to_vector());
   }
 }
 
@@ -197,6 +234,41 @@ TEST_CASE("simulate rejects bad circuits") {
   CHECK_THROWS_AS(simulate(Circuit{0, {}}, {}), std::invalid_argument);
   const Circuit bad_qubit{2, {TimeStep{{Op{GateType::X, {2, 0}, 0.0}}}}};
   CHECK_THROWS_AS(simulate(bad_qubit, {}), std::out_of_range);
+}
+
+TEST_CASE("simulate keeps its exception messages and their priority") {
+  using Catch::Matchers::Equals;
+  const auto one_op = [](int n, Op op) { return Circuit{n, {TimeStep{{op}}}}; };
+  // Each gate reports a bad qubit with the name of its kernel.
+  CHECK_THROWS_WITH(simulate(one_op(2, Op{GateType::RY, {2, 0}, 0.1}), {}),
+                    Equals("apply_ry: qubit 2 out of range for 2 qubits"));
+  CHECK_THROWS_WITH(simulate(one_op(2, Op{GateType::T, {5, 0}, 0.0}), {}),
+                    Equals("apply_1q: qubit 5 out of range for 2 qubits"));
+  CHECK_THROWS_WITH(simulate(one_op(2, Op{GateType::CNOT, {0, 2}, 0.0}), {}),
+                    Equals("apply_cnot: qubit 2 out of range for 2 qubits"));
+  CHECK_THROWS_WITH(simulate(one_op(2, Op{GateType::CNOT, {1, 1}, 0.0}), {}),
+                    Equals("apply_cnot: both qubits are 1"));
+  CHECK_THROWS_WITH(simulate(one_op(2, Op{GateType::CZ, {-1, 0}, 0.0}), {}),
+                    Equals("apply_2q: qubit -1 out of range for 2 qubits"));
+  CHECK_THROWS_WITH(simulate(one_op(2, Op{GateType::CY, {0, 0}, 0.0}), {}),
+                    Equals("apply_2q: both qubits are 0"));
+  CHECK_THROWS_WITH(
+      simulate(Circuit{2, {TimeStep{}}}, {PauliError{0, 2, GateType::X}}),
+      Equals("apply_1q: qubit 2 out of range for 2 qubits"));
+
+  // Error metadata first, then the register size, then qubits in execution
+  // order: a step's gates before its errors.
+  const Circuit bad_gate = one_op(2, Op{GateType::RY, {2, 0}, 0.1});
+  CHECK_THROWS_WITH(simulate(bad_gate, {PauliError{1, 0, GateType::X}}),
+                    Equals("error timestep 1 out of range for 1 time steps"));
+  CHECK_THROWS_AS(simulate(one_op(0, Op{GateType::RY, {2, 0}, 0.1}), {}),
+                  std::invalid_argument);
+  CHECK_THROWS_WITH(simulate(bad_gate, {PauliError{0, 7, GateType::X}}),
+                    Equals("apply_ry: qubit 2 out of range for 2 qubits"));
+  const Circuit late_gate{
+      2, {TimeStep{}, TimeStep{{Op{GateType::RY, {2, 0}, 0.1}}}}};
+  CHECK_THROWS_WITH(simulate(late_gate, {PauliError{0, 7, GateType::X}}),
+                    Equals("apply_1q: qubit 7 out of range for 2 qubits"));
 }
 
 TEST_CASE("run rejects fewer than 1 shot") {

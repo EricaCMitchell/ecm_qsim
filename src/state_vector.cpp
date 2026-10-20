@@ -225,6 +225,64 @@ void StateVector::apply_cnot(int control, int target) {
   }
 }
 
+void StateVector::apply_real_1q(const Eigen::Matrix2d& m, int k) {
+  check_qubit(k, n_qubits_, "apply_real_1q");
+  const double m00 = m(0, 0);
+  const double m01 = m(0, 1);
+  const double m10 = m(1, 0);
+  const double m11 = m(1, 1);
+  const std::uint64_t bit = std::uint64_t{1} << k;
+  const std::uint64_t dim = size();
+  // The block traversal of apply_ry.
+  for (std::uint64_t block = 0; block < dim; block += 2 * bit) {
+    for (std::uint64_t i = block; i < block + bit; ++i) {
+      const auto i0 = static_cast<Eigen::Index>(i);
+      const auto i1 = static_cast<Eigen::Index>(i + bit);
+      const std::complex<double> a0 = amplitudes_(i0);
+      const std::complex<double> a1 = amplitudes_(i1);
+      amplitudes_(i0) = m00 * a0 + m01 * a1;
+      amplitudes_(i1) = m10 * a0 + m11 * a1;
+    }
+  }
+}
+
+void StateVector::apply_real_2q(const Eigen::Matrix4d& m, int j, int k) {
+  check_qubit(j, n_qubits_, "apply_real_2q");
+  check_qubit(k, n_qubits_, "apply_real_2q");
+  if (j == k) {
+    throw std::invalid_argument("apply_real_2q: both qubits are " +
+                                std::to_string(j));
+  }
+  const std::uint64_t bit_j = std::uint64_t{1} << j;
+  const std::uint64_t bit_k = std::uint64_t{1} << k;
+  const std::uint64_t low_bit = std::min(bit_j, bit_k);
+  const std::uint64_t high_bit = std::max(bit_j, bit_k);
+  const std::uint64_t dim = size();
+  // The traversal of apply_cnot: each index with both bits clear, once.
+  for (std::uint64_t high_base = 0; high_base < dim;
+       high_base += 2 * high_bit) {
+    for (std::uint64_t middle = 0; middle < high_bit; middle += 2 * low_bit) {
+      for (std::uint64_t offset = 0; offset < low_bit; ++offset) {
+        const std::uint64_t i = high_base + middle + offset;
+        // m's row order: (qubit j, qubit k) = 00, 01, 10, 11.
+        const std::array<Eigen::Index, 4> index = {
+            static_cast<Eigen::Index>(i),
+            static_cast<Eigen::Index>(i + bit_k),
+            static_cast<Eigen::Index>(i + bit_j),
+            static_cast<Eigen::Index>(i + bit_j + bit_k),
+        };
+        const std::array<std::complex<double>, 4> a = {
+            amplitudes_(index[0]), amplitudes_(index[1]), amplitudes_(index[2]),
+            amplitudes_(index[3])};
+        for (int r = 0; r < 4; ++r) {
+          amplitudes_(index[r]) =
+              m(r, 0) * a[0] + m(r, 1) * a[1] + m(r, 2) * a[2] + m(r, 3) * a[3];
+        }
+      }
+    }
+  }
+}
+
 std::string StateVector::to_string() const {
   std::ostringstream out;
   out << std::fixed << std::setprecision(4);

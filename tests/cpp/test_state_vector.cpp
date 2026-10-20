@@ -487,3 +487,82 @@ TEST_CASE("apply_cnot rejects bad qubit pairs") {
   REQUIRE_THROWS_AS(state.apply_cnot(3, 0), std::out_of_range);
   REQUIRE_THROWS_AS(state.apply_cnot(0, 64), std::out_of_range);
 }
+
+namespace {
+
+// Real entries drawn from the standard normal distribution, as
+// random_matrix draws its complex ones.
+template <int Size>
+Eigen::Matrix<double, Size, Size> random_real_matrix(std::mt19937_64& rng) {
+  std::normal_distribution<double> normal;
+  Eigen::Matrix<double, Size, Size> m;
+  for (int r = 0; r < Size; ++r) {
+    for (int c = 0; c < Size; ++c) {
+      m(r, c) = normal(rng);
+    }
+  }
+  return m;
+}
+
+}  // namespace
+
+TEST_CASE("apply_real_1q matches apply_1q with the same matrix") {
+  std::mt19937_64 rng(kSeed);
+  for (int trial = 0; trial < 3; ++trial) {
+    for (int n = 1; n <= 8; ++n) {
+      for (int q = 0; q < n; ++q) {
+        CAPTURE(trial, n, q);
+        const Eigen::Matrix2d m = random_real_matrix<2>(rng);
+        const Eigen::VectorXcd psi = random_state(n, rng);
+        StateVector expected(psi);
+        expected.apply_1q(m.cast<cd>(), q);
+        StateVector state(psi);
+        state.apply_real_1q(m, q);
+        require_close(state.to_vector(), expected.to_vector());
+      }
+    }
+  }
+}
+
+TEST_CASE("apply_real_2q matches apply_2q for every ordered qubit pair") {
+  // first is the high bit of the matrix index in both kernels; pairs with
+  // first below and above second cover both CNOT orientations.
+  std::mt19937_64 rng(kSeed);
+  for (int trial = 0; trial < 3; ++trial) {
+    for (int n = 2; n <= 8; ++n) {
+      for (int j = 0; j < n; ++j) {
+        for (int k = 0; k < n; ++k) {
+          if (j == k) {
+            continue;
+          }
+          CAPTURE(trial, n, j, k);
+          const Eigen::Matrix4d m = random_real_matrix<4>(rng);
+          const Eigen::VectorXcd psi = random_state(n, rng);
+          StateVector expected(psi);
+          expected.apply_2q(m.cast<cd>(), j, k);
+          StateVector state(psi);
+          state.apply_real_2q(m, j, k);
+          require_close(state.to_vector(), expected.to_vector());
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("apply_real_1q rejects a qubit outside the state") {
+  const int k = GENERATE(-1, 3, 64);
+  CAPTURE(k);
+  StateVector state(3);
+  const Eigen::Matrix2d x = matrix_1q(GateType::X).real();
+  REQUIRE_THROWS_AS(state.apply_real_1q(x, k), std::out_of_range);
+}
+
+TEST_CASE("apply_real_2q rejects bad qubit pairs") {
+  StateVector state(3);
+  const Eigen::Matrix4d cnot = matrix_2q(GateType::CNOT).real();
+  REQUIRE_THROWS_AS(state.apply_real_2q(cnot, 1, 1), std::invalid_argument);
+  REQUIRE_THROWS_AS(state.apply_real_2q(cnot, 0, 3), std::out_of_range);
+  REQUIRE_THROWS_AS(state.apply_real_2q(cnot, -1, 0), std::out_of_range);
+  REQUIRE_THROWS_AS(state.apply_real_2q(cnot, 3, 0), std::out_of_range);
+  REQUIRE_THROWS_AS(state.apply_real_2q(cnot, 0, 64), std::out_of_range);
+}

@@ -1,8 +1,9 @@
 #ifndef ECM_QSIM_STATE_VECTOR_HPP_
 #define ECM_QSIM_STATE_VECTOR_HPP_
 
-// StateVector: owns the 2^n amplitudes; apply_1q / apply_2q kernels, and
-// apply_ry / apply_cnot for the benchmark's hot gates.
+// StateVector: owns the 2^n amplitudes; apply_1q / apply_2q kernels,
+// apply_ry / apply_cnot for the benchmark's hot gates, and apply_real_1q /
+// apply_real_2q for real fused matrices.
 // Amplitude index i holds the basis state in which qubit k equals bit k of i,
 // so qubit 0 is the least significant bit.
 
@@ -64,6 +65,18 @@ public:
   // Throws std::out_of_range if control or target is not a qubit,
   // std::invalid_argument if control == target.
   void apply_cnot(int control, int target);
+
+  // apply_1q(m, k) for a real matrix, with apply_ry's traversal: each
+  // coefficient multiplies the real and imaginary parts directly.
+  // Throws std::out_of_range unless 0 <= k < n_qubits().
+  void apply_real_1q(const Eigen::Matrix2d& m, int k);
+
+  // apply_2q(m, j, k) for a real matrix, with apply_cnot's traversal over
+  // the 2^(n-2) indices with both bits clear. j is the high bit of m's row
+  // index, as in apply_2q.
+  // Throws std::out_of_range if j or k is not a qubit,
+  // std::invalid_argument if j == k.
+  void apply_real_2q(const Eigen::Matrix4d& m, int j, int k);
 
   // One line "|<bitstring>>  p=<4 decimals>" per basis state, in index
   // order. States with negligible probability are omitted.
