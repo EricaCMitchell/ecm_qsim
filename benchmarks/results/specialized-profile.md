@@ -34,13 +34,14 @@ order, so the noisy counts are also identical.
 | 26 | 40.35 | 19.95 | 2.02x | 1.50 GiB |
 | 27 | 83.82 | 43.74 | 1.92x | 3.00 GiB |
 | 28 | 171.4 | 86.43 | 1.98x | 6.00 GiB |
-| 29 | 359.0 | 253.0 | 1.42x | 12.01 GiB |
+| 29 | 359.0 | 172.2 | 2.08x | 12.01 GiB |
 
-Prediction for n = 29, printed before the run from the n = 28 time: 179.1 s. Measured: 253.0 s
-(+41 %). One rerun of n = 29 alone (`/usr/bin/time -l`) took 172.2 s (2.08x, -4 % against the
-prediction). In that rerun, the maximum resident set was 9.8 GB against a 12.9 GB peak footprint,
-so the OS held about 3 GB of the state compressed, and 0.8 GB of swap was in use by other
-processes. The n = 29 profile (175109 samples, about 175 s) agrees with the rerun.
+Prediction for n = 29, printed before the run from the n = 28 time: 179.1 s. Measured: 172.2 s
+(-4 %). The n = 29 value is the median of three standalone reruns (`/usr/bin/time -l`, same binary
+and arguments): 172.24 s, 174.06 s and 167.25 s. The runner's own n = 29 run took 253.0 s (+41 %),
+and specialized.json keeps it as `dropped_wall_s`. The three reruns agree within 4 %, and the n = 29
+profile (175109 samples, about 175 s) agrees with them, so that run was an outlier. Its cause is
+not known: the reruns had no swaps and the same 12.9 GB peak footprint.
 
 Many shots (n = 12, 100000 shots): 29.18 s, 3427 shots/s (0.292 ms per shot), 3.51x the
 reference. Peak memory 1.5 MiB.

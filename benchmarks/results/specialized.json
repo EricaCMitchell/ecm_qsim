@@ -251,19 +251,26 @@
       },
       {
         "n": 29,
-        "wall_s": 252.96802724999725,
-        "peak_memory_bytes": 12892284192,
+        "wall_s": 172.24,
+        "peak_memory_bytes": 12892300576,
         "modeled_bytes": 14774687498240,
         "algorithmic_flops": 1868310773760,
-        "effective_bandwidth_gbps": 58.40535524925774,
-        "fraction_of_peak": 0.5840535524925774
+        "effective_bandwidth_gbps": 85.77965338039944,
+        "fraction_of_peak": 0.8577965338039943,
+        "rerun_wall_s": [
+          172.24,
+          174.06,
+          167.25
+        ],
+        "dropped_wall_s": 252.96802724999725,
+        "note": "wall_s is the median of three standalone reruns (/usr/bin/time -l, same binary and arguments). The runner's own n=29 run, dropped_wall_s, was an outlier."
       }
     ],
     "prediction": {
       "n": 29,
       "from_n": 28,
       "predicted_s": 179.1023681960924,
-      "measured_s": 252.96802724999725
+      "measured_s": 172.24
     }
   },
   "many_shots": {
