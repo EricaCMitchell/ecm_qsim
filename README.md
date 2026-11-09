@@ -241,3 +241,8 @@ benchmarks/         brickwork circuit generator and benchmark runner
 experiments/        experiment scripts and figures
 examples/           example circuits
 ```
+
+## License
+
+Copyright 2026 Erica C. Mitchell. Licensed under the Apache License, Version 2.0. See
+[LICENSE](LICENSE).

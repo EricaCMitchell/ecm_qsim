@@ -1,11 +1,13 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ecm_qsim"
 version = "0.1.0"
 description = "Tooling for the ecm_qsim simulator: circuit generators, benchmarks, analysis"
+license = "Apache-2.0"
+authors = [{ name = "Erica C. Mitchell" }]
 requires-python = ">=3.11"
 dependencies = [
     "numpy",
